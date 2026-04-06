@@ -272,7 +272,7 @@ export default function SafetyPage() {
                 <select
                   value={projectId}
                   onChange={(event) => setProjectId(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 >
                   {projects.map((project) => (
                     <option key={project.id} value={project.id} className="text-slate-950">
@@ -289,7 +289,7 @@ export default function SafetyPage() {
                   type="date"
                   value={safetyDate}
                   onChange={(event) => setSafetyDate(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 />
               </label>
             </div>
@@ -300,7 +300,7 @@ export default function SafetyPage() {
                 <select
                   value={shift}
                   onChange={(event) => setShift(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 >
                   <option className="text-slate-950">Day</option>
                   <option className="text-slate-950">Night</option>

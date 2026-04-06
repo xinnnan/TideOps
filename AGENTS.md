@@ -148,6 +148,7 @@ After finishing any meaningful task:
 - For TideOps page chrome, avoid stacking multiple translucent shells on top of tinted or gradient canvases. A flat app background plus solid surface cards is more stable and prevents visible color banding across long forms and admin workspaces.
 - Do not put decorative texture overlays such as `noise-panel` on the default shared `Card` component. Large cards and long admin workspaces make those overlays visible as horizontal page bands once the page scrolls.
 - Keep shared shell shadows subtle. Large blur shadows on sticky sidebars or full-width workspace cards can read like background color shifts on long pages.
+- For dark form cards that use native browser date/time/datetime or select controls, apply one shared high-contrast class instead of ad hoc per-page fixes. Native picker indicators and arrows need explicit dark-mode styling or they disappear against translucent dark backgrounds.
 
 ### Current Verified State
 
@@ -162,19 +163,18 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Expand daily reports and polish exported PDFs. Daily reports need a "today's field crew" list that can mix selected users and manually entered engineer names, and that list must appear in the exported PDF. Safety, daily report, and incident PDFs also need a cleaner client-facing design: better pagination, pure white background, no TideOps/product tags, and more neutral service-oriented wording instead of usage guidance.
+- Tighten the dark-form control styling. Date, time, and datetime picker icons in pages like daily report should stay visible against dark backgrounds, and other similar native controls in those dark cards should use the same high-contrast treatment.
 
 Checklist:
 
-- [x] Re-read project continuity notes and inspect the report and PDF implementation
-- [x] Add daily report field-crew storage to schema, types, mapping, and provider flows
-- [x] Add field-crew selection + manual names to the daily report form and feed
-- [x] Rework PDF export layout for cleaner block pagination and white-background output
-- [x] Remove product tags from PDF headers and rewrite PDF copy to be client-facing and neutral
-- [x] Run lint/build and update continuity notes with any new durable rules
+- [x] Re-read project continuity notes and inspect native picker usage in the workspace
+- [x] Add a shared dark native-control class for date/time/datetime and select styling
+- [x] Apply the shared class across report, safety, and incident dark forms
+- [x] Run lint/build and update continuity notes if the pattern should be kept
 
 Most likely next tasks:
 
+- [ ] If more dark cards get date/time/select controls later, reuse `dark-native-control` instead of copying browser-specific pseudo-element styles
 - [ ] After this feature lands, run the new daily-report attendee migration in Supabase before testing in Vercel
 - [ ] If field crew later needs richer structure such as lead/technician roles, store that in a separate JSON object instead of overloading a flat string list
 - [ ] If exported PDFs later need logos or client branding, add that as an optional document theme layer without reintroducing app-product badges in the header

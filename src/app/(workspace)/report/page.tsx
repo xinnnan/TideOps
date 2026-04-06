@@ -429,7 +429,7 @@ export default function ReportPage() {
                 <select
                   value={projectId}
                   onChange={(event) => setProjectId(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 >
                   {projects.map((project) => (
                     <option key={project.id} value={project.id} className="text-slate-950">
@@ -446,7 +446,7 @@ export default function ReportPage() {
                   type="date"
                   value={reportDate}
                   onChange={(event) => handleDateChange(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 />
               </label>
             </div>
@@ -458,7 +458,7 @@ export default function ReportPage() {
                   type="time"
                   value={startTime}
                   onChange={(event) => setStartTime(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 />
               </label>
               <label className="block space-y-2">
@@ -467,7 +467,7 @@ export default function ReportPage() {
                   type="time"
                   value={endTime}
                   onChange={(event) => setEndTime(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 />
               </label>
             </div>
@@ -499,7 +499,7 @@ export default function ReportPage() {
                   <select
                     value={selectedCrewUserId}
                     onChange={(event) => setSelectedCrewUserId(event.target.value)}
-                    className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                    className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                   >
                     <option value="" className="text-slate-950">
                       {language === "zh" ? "从用户中添加" : "Add from users"}
@@ -536,7 +536,7 @@ export default function ReportPage() {
                         ? "手动输入工程师姓名"
                         : "Add an engineer name manually"
                     }
-                    className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none placeholder:text-white/40"
+                    className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none placeholder:text-white/40"
                   />
                   <button
                     type="button"

@@ -85,3 +85,28 @@ a {
   background-size: 28px 28px;
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 90%);
 }
+
+.dark-native-control {
+  color-scheme: dark;
+}
+
+.dark-native-control::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.9);
+  opacity: 1;
+  cursor: pointer;
+}
+
+.dark-native-control::-webkit-datetime-edit,
+.dark-native-control::-webkit-datetime-edit-fields-wrapper,
+.dark-native-control::-webkit-datetime-edit-year-field,
+.dark-native-control::-webkit-datetime-edit-month-field,
+.dark-native-control::-webkit-datetime-edit-day-field,
+.dark-native-control::-webkit-datetime-edit-hour-field,
+.dark-native-control::-webkit-datetime-edit-minute-field,
+.dark-native-control::-webkit-datetime-edit-ampm-field {
+  color: #ffffff;
+}
+
+.dark-native-control::-webkit-datetime-edit-text {
+  color: rgba(255, 255, 255, 0.72);
+}

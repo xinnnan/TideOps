@@ -367,7 +367,7 @@ export default function IncidentPage() {
                 <select
                   value={projectId}
                   onChange={(event) => setProjectId(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 >
                   {projects.map((project) => (
                     <option key={project.id} value={project.id} className="text-slate-950">
@@ -384,7 +384,7 @@ export default function IncidentPage() {
                   type="datetime-local"
                   value={occurredAt}
                   onChange={(event) => setOccurredAt(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 />
               </label>
             </div>
@@ -395,7 +395,7 @@ export default function IncidentPage() {
                 <select
                   value={incidentType}
                   onChange={(event) => setIncidentType(event.target.value)}
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 >
                   <option className="text-slate-950">Near miss</option>
                   <option className="text-slate-950">Incident</option>
@@ -409,7 +409,7 @@ export default function IncidentPage() {
                   onChange={(event) =>
                     setSeverity(event.target.value as "low" | "medium" | "high")
                   }
-                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  className="dark-native-control w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
                 >
                   <option value="low" className="text-slate-950">
                     low
