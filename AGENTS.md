@@ -144,7 +144,7 @@ After finishing any meaningful task:
 
 Task summary:
 
-- The long-page background banding fix is confirmed by the user. Save the shared style cleanup to git and push it to `origin/main`.
+- The long-page background banding fix is complete and already pushed to `origin/main`. The shared style layer is now clean enough to proceed to Vercel deployment work.
 
 Checklist:
 
@@ -152,7 +152,7 @@ Checklist:
 - [x] Remove remaining shared decorative layers that can create horizontal banding on long cards
 - [x] Reduce shared shell shadows so large sticky/layout containers do not tint the page background
 - [x] Run lint and build after the background cleanup
-- [ ] Commit and push the confirmed background fix
+- [x] Commit and push the confirmed background fix
 
 Most likely next tasks:
 
