@@ -55,6 +55,8 @@ After finishing any meaningful task:
 - Main schema and RLS source of truth is `supabase/migrations/20260404233000_init_mvp.sql`.
 - Photo attachments for daily reports and incidents now also depend on `supabase/migrations/20260405165000_add_field_media.sql`.
 - Item-level photo associations for daily reports and incidents also depend on `supabase/migrations/20260405173500_item_level_media.sql`.
+- Verified on `2026-04-06`: `attachments_json` should not be treated as a required insert column for `daily_reports` or `incidents`. The app now stores per-item media in the item-level JSON columns and no longer hard-requires the legacy aggregate attachment column during insert. The storage bucket and policies from `20260405165000_add_field_media.sql` are still required for actual photo upload.
+- Verified on `2026-04-06`: in the current Supabase storage schema, `storage.objects.owner_id` compares as `text`, so media policies must use `auth.uid()::text` rather than `auth.uid()` to avoid `operator does not exist: text = uuid`.
 - RLS helper functions that read from RLS-protected tables such as `profiles`, `projects`, or `project_assignments` must be created as `security definer` with `set search_path = public`. Otherwise Supabase can hit recursive policy evaluation and return `500` for basic `select` queries.
 - Keep comment lines in `.env.local` commented. A plain text line without `#` becomes an unparsed env line and should be cleaned up.
 - On `2026-04-06`, `git push origin main` to `https://github.com/xinnnan/TideOps.git` succeeded again from this machine after the earlier GitHub access issue was resolved externally. If push failures return later, re-check which GitHub account the machine is using before changing repo config.
@@ -127,6 +129,7 @@ After finishing any meaningful task:
 - For daily reports and incidents, keep numbered-list entry strictly item-by-item. Do not reintroduce multi-line paste that automatically splits text into multiple numbered items.
 - In report and incident numbered-list entry, keep the add action inside the list input area, near the current items. Do not move the add button back up into the section header row.
 - In report and incident feeds, service engineers should only see and search their own records. Operations managers can see all records and should get filter controls such as reporter, project, site, and date.
+- Verified on `2026-04-06`: `Report` and `Incident` already follow the intended role split, and `Attendance` also hides team summary views from engineers. `Safety` does not yet match that access model; its recent-record and summary sections still read from the full `safetyCheckins` list for all users, and safety PDF export is not implemented.
 - In Next.js 16 app routes, avoid `useSearchParams()` directly in statically built pages unless you intentionally wrap the read in `Suspense`. For simple client-only notices on login-like pages, reading `window.location.search` after hydration is the simpler path.
 - For auth/session effects in React 19, prefer `useEffectEvent` when the effect needs the latest async loader without creating dependency churn.
 - For TideOps page chrome, avoid stacking multiple translucent shells on top of tinted or gradient canvases. A flat app background plus solid surface cards is more stable and prevents visible color banding across long forms and admin workspaces.
@@ -139,25 +142,27 @@ After finishing any meaningful task:
 - `npm run build` passed on `2026-04-06`
 - Local routes `/login` and `/today` returned HTTP `200` on `2026-04-05`
 - Old dev servers on ports `3000` and `3001` were stopped and a fresh `npm run dev` instance was restarted on port `3000` on `2026-04-05`
+- Verified on `2026-04-06`: `vercel` CLI is installed as `50.9.5`, but `vercel whoami` currently returns `No existing credentials found`, so deployment is blocked until the machine is authenticated to Vercel.
+- Verified on `2026-04-06`: local `.env.local` already contains non-empty values for `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, so dashboard-based Vercel deployment can proceed once those same two values are added in Vercel Project Settings.
 
 ## Current Scratchpad
 
 Task summary:
 
-- The long-page background banding fix is complete and already pushed to `origin/main`. The shared style layer is now clean enough to proceed to Vercel deployment work.
+- Fix the current Supabase submit error for daily reports. The database on the user's side is missing `attachments_json`, so the app should stop requiring that legacy column on insert while still preserving item-level media support.
 
 Checklist:
 
-- [x] Re-read project continuity notes before the save-and-push pass
-- [x] Remove remaining shared decorative layers that can create horizontal banding on long cards
-- [x] Reduce shared shell shadows so large sticky/layout containers do not tint the page background
-- [x] Run lint and build after the background cleanup
-- [x] Commit and push the confirmed background fix
+- [x] Re-read project continuity notes before the submit-error fix
+- [x] Confirm whether `attachments_json` is still being written by report and incident submit flows
+- [x] Remove the hard dependency on `attachments_json` from report and incident inserts
+- [x] Run lint and build after the fix
+- [ ] Tell the user which database migration is still required for real photo upload
 
 Most likely next tasks:
 
-- [ ] After the push, configure Vercel project env vars from local `.env.local` rather than from committed files
-- [ ] Import the repo into Vercel and set `NEXT_PUBLIC_SUPABASE_URL` plus `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- [ ] After Vercel auth is available, use `.env.local` as the source of truth for the two public env vars
+- [ ] After the deploy finishes, test `/login` and `/reset-password` on the Vercel domain
 - [ ] Add the Vercel production URL back into Supabase `Site URL` and redirect allow list
 - [ ] If TideOps later needs more visual atmosphere, reintroduce it through one controlled background treatment instead of stacking multiple translucent overlays
 - [ ] Keep tightening remaining admin copy so feature names stay clear without slipping back into implementation vocabulary

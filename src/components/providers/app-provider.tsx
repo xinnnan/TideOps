@@ -1596,12 +1596,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Add at least one next-day plan item before submitting.",
       };
     }
-    const attachmentPaths = [
-      ...majorTaskItems.flatMap((item) => item.attachments),
-      ...blockerItems.flatMap((item) => item.attachments),
-      ...nextDayPlanItems.flatMap((item) => item.attachments),
-    ];
-
     const startTime = project.shiftStartTime || null;
     const endTime = project.shiftEndTime || null;
     const shift =
@@ -1639,7 +1633,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         major_tasks_items_json: majorTaskItems,
         blocker_items_json: blockerItems,
         next_day_plan_items_json: nextDayPlanItems,
-        attachments_json: attachmentPaths,
         status: "submitted",
         submitted_at: new Date().toISOString(),
       })
@@ -1713,12 +1706,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Add at least one immediate action before submitting.",
       };
     }
-    const attachmentPaths = [
-      ...factItems.flatMap((item) => item.attachments),
-      ...immediateActionItems.flatMap((item) => item.attachments),
-      ...followUpItems.flatMap((item) => item.attachments),
-    ];
-
     const { data, error } = await supabase
       .from("incidents")
       .insert({
@@ -1737,7 +1724,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         fact_items_json: factItems,
         immediate_action_items_json: immediateActionItems,
         follow_up_items_json: followUpItems,
-        attachments_json: attachmentPaths,
         status: payload.escalationRequired ? "under_review" : "open",
       })
       .select("id")

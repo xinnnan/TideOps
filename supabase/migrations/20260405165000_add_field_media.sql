@@ -60,7 +60,7 @@ begin
     to authenticated
     using (
       bucket_id = 'field-media'
-      and owner_id = auth.uid()
+      and owner_id = auth.uid()::text
     );
   end if;
 end
@@ -81,11 +81,11 @@ begin
     to authenticated
     using (
       bucket_id = 'field-media'
-      and owner_id = auth.uid()
+      and owner_id = auth.uid()::text
     )
     with check (
       bucket_id = 'field-media'
-      and owner_id = auth.uid()
+      and owner_id = auth.uid()::text
     );
   end if;
 end
@@ -106,7 +106,7 @@ begin
     to authenticated
     using (
       bucket_id = 'field-media'
-      and owner_id = auth.uid()
+      and owner_id = auth.uid()::text
     );
   end if;
 end
