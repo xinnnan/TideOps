@@ -57,6 +57,7 @@ After finishing any meaningful task:
 - Item-level photo associations for daily reports and incidents also depend on `supabase/migrations/20260405173500_item_level_media.sql`.
 - RLS helper functions that read from RLS-protected tables such as `profiles`, `projects`, or `project_assignments` must be created as `security definer` with `set search_path = public`. Otherwise Supabase can hit recursive policy evaluation and return `500` for basic `select` queries.
 - Keep comment lines in `.env.local` commented. A plain text line without `#` becomes an unparsed env line and should be cleaned up.
+- For GitHub publishing on this machine, the outbound Git identity currently resolves to `gaoqiantu` for both HTTPS and SSH. Pushing to `https://github.com/xinnnan/TideOps.git` will fail with `403` until that account is granted write access or the git remote/auth is switched to an authorized `xinnnan` credential.
 
 ### Auth And Onboarding
 
@@ -141,20 +142,21 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Prepare the current TideOps app for its first real GitHub save point before Vercel deployment. Commit the app source, docs, and Supabase assets while keeping local secrets and the private PRD out of git.
+- Prepare the current TideOps app for its first real GitHub save point before Vercel deployment. The local commit is complete, but pushing is blocked because the current machine authenticates to GitHub as `gaoqiantu`, which does not have write access to `xinnnan/TideOps`.
 
 Checklist:
 
 - [x] Re-read project continuity notes before starting the background consistency pass
 - [x] Re-read project continuity notes before the Git save point
-- [ ] Confirm tracked vs ignored files so `.env.local` and the private PRD remain excluded
-- [ ] Commit the current TideOps application state on `main`
+- [x] Confirm tracked vs ignored files so `.env.local` and the private PRD remain excluded
+- [x] Commit the current TideOps application state on `main`
 - [ ] Push the commit to `origin/main`
 - [ ] Keep notes updated for the later Vercel deployment step
 
 Most likely next tasks:
 
 - [ ] After the Git push, configure Vercel project env vars from local `.env.local` rather than from committed files
+- [ ] Resolve GitHub write access for `xinnnan/TideOps` on this machine before retrying `git push origin main`
 - [ ] If TideOps later needs more visual atmosphere, reintroduce it through one controlled background treatment instead of stacking multiple translucent overlays
 - [ ] Keep tightening remaining admin copy so feature names stay clear without slipping back into implementation vocabulary
 
