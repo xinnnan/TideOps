@@ -67,6 +67,7 @@ export default function AttendancePage() {
     clockOut,
     copy,
     currentUser,
+    deleteAttendanceLog,
     isOperationsManager,
     language,
     leaveRequests,
@@ -127,6 +128,10 @@ export default function AttendancePage() {
   const approvalQueue = leaveRequests.filter((request) => request.status === "submitted");
   const exceptionLogs = attendanceLogs.filter((log) =>
     ["missing_clock_out", "missing_clock_in"].includes(log.attendanceStatus),
+  );
+  const recentTeamLogs = useMemo(
+    () => attendanceLogs.slice(0, 12),
+    [attendanceLogs],
   );
 
   const openSessions = attendanceLogs.filter(
@@ -217,6 +222,27 @@ export default function AttendancePage() {
   ) {
     const result = await reviewLeave(requestId, status, managerComments[requestId] ?? "");
     setFeedback(result.ok ? copy.leave.reviewSuccess : result.error ?? "");
+  }
+
+  async function handleDeleteAttendanceLog(logId: string) {
+    const confirmed = window.confirm(
+      language === "zh"
+        ? "确认删除这条考勤记录？此操作无法撤销。"
+        : "Delete this attendance record? This cannot be undone.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const result = await deleteAttendanceLog(logId);
+    setFeedback(
+      result.ok
+        ? language === "zh"
+          ? "考勤记录已删除。"
+          : "Attendance record deleted."
+        : result.error ?? "",
+    );
   }
 
   return (
@@ -505,6 +531,79 @@ export default function AttendancePage() {
               </div>
             </CardContent>
           </Card>
+
+          {isOperationsManager ? (
+            <Card>
+              <CardHeader>
+                <CardEyebrow>
+                  {language === "zh" ? "最近团队记录" : "Recent team records"}
+                </CardEyebrow>
+                <CardTitle>
+                  {language === "zh" ? "最近团队记录" : "Recent team records"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "zh"
+                    ? "运营经理可以删除错误或重复的考勤记录。"
+                    : "Operations managers can remove incorrect or duplicate attendance records."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {recentTeamLogs.length === 0 ? (
+                  <div className="rounded-[24px] border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                    {copy.common.noData}
+                  </div>
+                ) : (
+                  recentTeamLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="rounded-[24px] border border-slate-200 bg-white p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-900">
+                            {profiles.find((profile) => profile.id === log.userId)?.fullName ??
+                              log.userId}
+                          </p>
+                          <p className="text-sm text-slate-600">
+                            {formatDisplayDate(log.date, language)} ·{" "}
+                            {projects.find((project) => project.id === log.projectId)?.name ??
+                              "--"}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {formatDisplayTime(log.clockInTime, language)} -{" "}
+                            {formatDisplayTime(log.clockOutTime, language)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            tone={
+                              log.attendanceStatus === "present"
+                                ? "success"
+                                : log.attendanceStatus === "partial"
+                                  ? "accent"
+                                  : log.attendanceStatus === "leave"
+                                    ? "signal"
+                                    : "danger"
+                            }
+                          >
+                            {getAttendanceLabel(log.attendanceStatus, language)}
+                          </Badge>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteAttendanceLog(log.id)}
+                            className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600"
+                          >
+                            {copy.common.delete}
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-600">{log.note || "--"}</p>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
         </>
       ) : null}
 

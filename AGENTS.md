@@ -57,6 +57,8 @@ After finishing any meaningful task:
 - Item-level photo associations for daily reports and incidents also depend on `supabase/migrations/20260405173500_item_level_media.sql`.
 - Verified on `2026-04-06`: `attachments_json` should not be treated as a required insert column for `daily_reports` or `incidents`. The app now stores per-item media in the item-level JSON columns and no longer hard-requires the legacy aggregate attachment column during insert. The storage bucket and policies from `20260405165000_add_field_media.sql` are still required for actual photo upload.
 - Verified on `2026-04-06`: in the current Supabase storage schema, `storage.objects.owner_id` compares as `text`, so media policies must use `auth.uid()::text` rather than `auth.uid()` to avoid `operator does not exist: text = uuid`.
+- Verified on `2026-04-06`: once the `field-media` bucket and policies exist, `400` uploads are most likely caused by bucket restrictions, especially narrow `allowed_mime_types`. For mobile/browser image uploads, `image/*` is more robust than an explicit short allowlist because devices can emit MIME variants such as `image/jpg` or HEIC/HEIF variants.
+- Verified on `2026-04-06`: if operations managers need to delete daily reports or incidents with attached field photos, `storage.objects` also needs an operations-manager delete policy for the `field-media` bucket. Table-level delete alone is not enough to remove uploaded attachments.
 - RLS helper functions that read from RLS-protected tables such as `profiles`, `projects`, or `project_assignments` must be created as `security definer` with `set search_path = public`. Otherwise Supabase can hit recursive policy evaluation and return `500` for basic `select` queries.
 - Keep comment lines in `.env.local` commented. A plain text line without `#` becomes an unparsed env line and should be cleaned up.
 - On `2026-04-06`, `git push origin main` to `https://github.com/xinnnan/TideOps.git` succeeded again from this machine after the earlier GitHub access issue was resolved externally. If push failures return later, re-check which GitHub account the machine is using before changing repo config.
@@ -126,6 +128,7 @@ After finishing any meaningful task:
 - Operations managers can also submit leave requests. Team-wide attendance summaries and team exception views should stay hidden from ordinary service engineers.
 - Leave type is currently fixed to `unpaid` in the UI. Do not expose a leave-type dropdown again until PTO or other leave categories become a real configurable feature.
 - PDF export for daily reports and incidents currently exports structured text plus item-level photo counts; inline photo embedding is not implemented yet.
+- Verified on `2026-04-06`: deleting a safety check-in can fail if a daily report still points at it through `daily_reports.safety_checkin_id`. The safe delete flow is to null out those references first, then remove the safety record.
 - For daily reports and incidents, keep numbered-list entry strictly item-by-item. Do not reintroduce multi-line paste that automatically splits text into multiple numbered items.
 - In report and incident numbered-list entry, keep the add action inside the list input area, near the current items. Do not move the add button back up into the section header row.
 - In report and incident feeds, service engineers should only see and search their own records. Operations managers can see all records and should get filter controls such as reporter, project, site, and date.
@@ -149,15 +152,16 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Fix the current Supabase submit error for daily reports. The database on the user's side is missing `attachments_json`, so the app should stop requiring that legacy column on insert while still preserving item-level media support.
+- Let operations managers delete attendance logs, safety check-ins, daily reports, and incidents, while service engineers cannot delete any of those records.
 
 Checklist:
 
-- [x] Re-read project continuity notes before the submit-error fix
-- [x] Confirm whether `attachments_json` is still being written by report and incident submit flows
-- [x] Remove the hard dependency on `attachments_json` from report and incident inserts
-- [x] Run lint and build after the fix
-- [ ] Tell the user which database migration is still required for real photo upload
+- [x] Re-read project continuity notes before the delete-permission update
+- [x] Add manager-only delete actions in the app state layer
+- [x] Add manager-only delete policies for the four record tables
+- [x] Add manager-only delete controls to the attendance, safety, report, and incident pages
+- [x] Keep field-media storage policies aligned so manager record deletion can also remove attachments
+- [x] Run lint and build after wiring the UI
 
 Most likely next tasks:
 

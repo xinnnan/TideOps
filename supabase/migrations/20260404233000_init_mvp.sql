@@ -688,6 +688,12 @@ to authenticated
 using (user_id = auth.uid() or public.is_operations_manager())
 with check (user_id = auth.uid() or public.is_operations_manager());
 
+create policy "operations managers can delete attendance logs"
+on public.attendance_logs
+for delete
+to authenticated
+using (public.is_operations_manager());
+
 create policy "users can read own leave requests and operations can read all"
 on public.leave_requests
 for select
@@ -726,6 +732,12 @@ to authenticated
 using (author_user_id = auth.uid() or public.is_operations_manager())
 with check (author_user_id = auth.uid() or public.is_operations_manager());
 
+create policy "operations managers can delete safety checkins"
+on public.safety_checkins
+for delete
+to authenticated
+using (public.is_operations_manager());
+
 create policy "users can read own daily reports and operations can read all"
 on public.daily_reports
 for select
@@ -745,6 +757,12 @@ to authenticated
 using (author_user_id = auth.uid() or public.is_operations_manager())
 with check (author_user_id = auth.uid() or public.is_operations_manager());
 
+create policy "operations managers can delete daily reports"
+on public.daily_reports
+for delete
+to authenticated
+using (public.is_operations_manager());
+
 create policy "users can read own incidents and operations can read all"
 on public.incidents
 for select
@@ -763,6 +781,12 @@ for update
 to authenticated
 using (reporter_user_id = auth.uid() or public.is_operations_manager())
 with check (reporter_user_id = auth.uid() or public.is_operations_manager());
+
+create policy "operations managers can delete incidents"
+on public.incidents
+for delete
+to authenticated
+using (public.is_operations_manager());
 
 create policy "operations can read audit logs"
 on public.audit_logs

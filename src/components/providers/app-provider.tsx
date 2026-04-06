@@ -188,12 +188,15 @@ interface AppContextValue extends WorkspaceData {
     briefingTopic: string;
     notes: string;
   }) => Promise<ActionResult>;
+  deleteAttendanceLog: (attendanceLogId: string) => Promise<ActionResult>;
+  deleteSafetyCheckin: (safetyCheckinId: string) => Promise<ActionResult>;
   submitDailyReport: (payload: {
     projectId: string;
     majorTasks: MediaListDraftItem[];
     blockers: MediaListDraftItem[];
     nextDayPlan: MediaListDraftItem[];
   }) => Promise<ActionResult>;
+  deleteDailyReport: (dailyReportId: string) => Promise<ActionResult>;
   submitIncident: (payload: {
     projectId: string;
     incidentType: string;
@@ -203,6 +206,7 @@ interface AppContextValue extends WorkspaceData {
     followUps: MediaListDraftItem[];
     escalationRequired: boolean;
   }) => Promise<ActionResult>;
+  deleteIncident: (incidentId: string) => Promise<ActionResult>;
   toggleIncidentStatus: (incidentId: string) => Promise<ActionResult>;
 }
 
@@ -300,6 +304,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return language === "zh"
       ? "当前没有拿到项目和站点信息，请重新选择项目后再试。"
       : "The project and site details are unavailable right now. Choose the project again and retry.";
+  }
+
+  function getOperationsDeleteOnlyMessage() {
+    return language === "zh"
+      ? "仅运营经理可以删除记录。"
+      : "Only operations managers can delete records.";
   }
 
   function getBrowserOrigin() {
@@ -407,6 +417,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     return result;
+  }
+
+  function collectMediaPaths(
+    items: Array<{ attachments: string[] }>,
+    extraPaths: string[] = [],
+  ) {
+    return Array.from(
+      new Set([
+        ...extraPaths.filter((item) => item.trim().length > 0),
+        ...items.flatMap((item) => item.attachments).filter((item) => item.trim().length > 0),
+      ]),
+    );
+  }
+
+  async function deleteFieldMedia(paths: string[]) {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || paths.length === 0) {
+      return;
+    }
+
+    await supabase.storage.from(FIELD_MEDIA_BUCKET).remove(paths);
   }
 
   async function loadWorkspace(userId: string) {
@@ -1535,6 +1567,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
+  async function deleteAttendanceLog(attendanceLogId: string): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    if (!isOperationsManager) {
+      return { ok: false, error: getOperationsDeleteOnlyMessage() };
+    }
+
+    const { error } = await supabase
+      .from("attendance_logs")
+      .delete()
+      .eq("id", attendanceLogId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Attendance log deleted", "attendance_log", attendanceLogId);
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function deleteSafetyCheckin(safetyCheckinId: string): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    if (!isOperationsManager) {
+      return { ok: false, error: getOperationsDeleteOnlyMessage() };
+    }
+
+    const { error: unlinkError } = await supabase
+      .from("daily_reports")
+      .update({ safety_checkin_id: null })
+      .eq("safety_checkin_id", safetyCheckinId);
+
+    if (unlinkError) {
+      return { ok: false, error: unlinkError.message };
+    }
+
+    const { error } = await supabase
+      .from("safety_checkins")
+      .delete()
+      .eq("id", safetyCheckinId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Safety check-in deleted", "safety_checkin", safetyCheckinId);
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
   async function submitDailyReport(payload: {
     projectId: string;
     majorTasks: MediaListDraftItem[];
@@ -1648,6 +1739,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
+  async function deleteDailyReport(dailyReportId: string): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    if (!isOperationsManager) {
+      return { ok: false, error: getOperationsDeleteOnlyMessage() };
+    }
+
+    const target = workspace.dailyReports.find((report) => report.id === dailyReportId);
+
+    if (!target) {
+      return { ok: false, error: language === "zh" ? "日报不存在。" : "Daily report not found." };
+    }
+
+    const mediaPaths = collectMediaPaths(
+      [...target.majorTaskItems, ...target.blockerItems, ...target.nextDayPlanItems],
+      target.attachments,
+    );
+
+    const { error } = await supabase
+      .from("daily_reports")
+      .delete()
+      .eq("id", dailyReportId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await deleteFieldMedia(mediaPaths);
+    await insertAuditLog("Daily report deleted", "daily_report", dailyReportId);
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
   async function submitIncident(payload: {
     projectId: string;
     incidentType: string;
@@ -1738,6 +1866,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
+  async function deleteIncident(incidentId: string): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    if (!isOperationsManager) {
+      return { ok: false, error: getOperationsDeleteOnlyMessage() };
+    }
+
+    const target = workspace.incidents.find((incident) => incident.id === incidentId);
+
+    if (!target) {
+      return { ok: false, error: language === "zh" ? "异常不存在。" : "Incident not found." };
+    }
+
+    const mediaPaths = collectMediaPaths(
+      [...target.factItems, ...target.immediateActionItems, ...target.followUpItems],
+      target.attachments,
+    );
+
+    const { error } = await supabase
+      .from("incidents")
+      .delete()
+      .eq("id", incidentId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await deleteFieldMedia(mediaPaths);
+    await insertAuditLog("Incident deleted", "incident", incidentId);
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
   async function toggleIncidentStatus(incidentId: string): Promise<ActionResult> {
     const supabase = getSupabaseBrowserClient();
 
@@ -1801,8 +1966,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     submitLeave,
     reviewLeave,
     submitSafetyCheckin,
+    deleteAttendanceLog,
+    deleteSafetyCheckin,
     submitDailyReport,
+    deleteDailyReport,
     submitIncident,
+    deleteIncident,
     toggleIncidentStatus,
   };
 

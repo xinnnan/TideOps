@@ -32,6 +32,7 @@ export default function IncidentPage() {
   const {
     copy,
     currentUser,
+    deleteIncident,
     incidents,
     isOperationsManager,
     language,
@@ -225,6 +226,27 @@ export default function IncidentPage() {
       reporterName,
       language,
     });
+  }
+
+  async function handleDelete(incidentId: string) {
+    const confirmed = window.confirm(
+      language === "zh"
+        ? "确认删除这条异常记录？此操作无法撤销。"
+        : "Delete this incident? This cannot be undone.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const result = await deleteIncident(incidentId);
+    setFeedback(
+      result.ok
+        ? language === "zh"
+          ? "异常记录已删除。"
+          : "Incident deleted."
+        : result.error ?? "",
+    );
   }
 
   return (
@@ -674,6 +696,13 @@ export default function IncidentPage() {
 
                     {isOperationsManager ? (
                       <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(incident.id)}
+                          className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600"
+                        >
+                          {copy.common.delete}
+                        </button>
                         <button
                           type="button"
                           onClick={() => void handleToggleStatus(incident.id)}

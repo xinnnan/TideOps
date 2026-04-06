@@ -23,6 +23,7 @@ export default function ReportPage() {
     copy,
     currentUser,
     dailyReports,
+    deleteDailyReport,
     isOperationsManager,
     language,
     profiles,
@@ -182,6 +183,27 @@ export default function ReportPage() {
       authorName,
       language,
     });
+  }
+
+  async function handleDelete(reportId: string) {
+    const confirmed = window.confirm(
+      language === "zh"
+        ? "确认删除这条日报？此操作无法撤销。"
+        : "Delete this daily report? This cannot be undone.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const result = await deleteDailyReport(reportId);
+    setFeedback(
+      result.ok
+        ? language === "zh"
+          ? "日报已删除。"
+          : "Daily report deleted."
+        : result.error ?? "",
+    );
   }
 
   return (
@@ -531,13 +553,24 @@ export default function ReportPage() {
                       ) : null}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => void handleExport(report.id)}
-                      className="mt-4 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
-                    >
-                      {language === "zh" ? "导出 PDF" : "Export PDF"}
-                    </button>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {isOperationsManager ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(report.id)}
+                          className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600"
+                        >
+                          {copy.common.delete}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void handleExport(report.id)}
+                        className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                      >
+                        {language === "zh" ? "导出 PDF" : "Export PDF"}
+                      </button>
+                    </div>
                   </div>
                 );
               })

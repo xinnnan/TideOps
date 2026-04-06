@@ -15,8 +15,8 @@ values (
   'field-media',
   'field-media',
   false,
-  10485760,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+  20971520,
+  array['image/*']
 )
 on conflict (id) do update
 set
@@ -40,6 +40,27 @@ begin
     with check (
       bucket_id = 'field-media'
       and (storage.foldername(name))[1] = auth.uid()::text
+    );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and policyname = 'operations managers can delete field media'
+  ) then
+    create policy "operations managers can delete field media"
+    on storage.objects
+    for delete
+    to authenticated
+    using (
+      bucket_id = 'field-media'
+      and public.is_operations_manager()
     );
   end if;
 end

@@ -46,6 +46,8 @@ export default function SafetyPage() {
   const {
     copy,
     currentUser,
+    deleteSafetyCheckin,
+    isOperationsManager,
     language,
     profiles,
     projects,
@@ -117,6 +119,27 @@ export default function SafetyPage() {
       setBriefingTopic("");
       setNotes("");
     }
+  }
+
+  async function handleDeleteSafetyCheckin(safetyCheckinId: string) {
+    const confirmed = window.confirm(
+      language === "zh"
+        ? "确认删除这条安全签到记录？此操作无法撤销。"
+        : "Delete this safety check-in? This cannot be undone.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const result = await deleteSafetyCheckin(safetyCheckinId);
+    setFeedback(
+      result.ok
+        ? language === "zh"
+          ? "安全签到已删除。"
+          : "Safety check-in deleted."
+        : result.error ?? "",
+    );
   }
 
   return (
@@ -301,9 +324,20 @@ export default function SafetyPage() {
                         {formatDisplayDate(record.date, language)} · {record.facilitator}
                       </p>
                     </div>
-                    <Badge tone={record.status === "submitted" ? "accent" : "success"}>
-                      {record.status}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={record.status === "submitted" ? "accent" : "success"}>
+                        {record.status}
+                      </Badge>
+                      {isOperationsManager ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteSafetyCheckin(record.id)}
+                          className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600"
+                        >
+                          {copy.common.delete}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <p className="mt-3 text-sm text-slate-600">{record.briefingTopic}</p>
                 </div>
