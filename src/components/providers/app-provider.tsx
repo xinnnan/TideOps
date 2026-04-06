@@ -39,7 +39,7 @@ import {
   mapSafetyCheckin,
   mapSite,
 } from "@/lib/workspace";
-import { getLocalDateString } from "@/lib/utils";
+import { combineLocalDateAndTime, getLocalDateString } from "@/lib/utils";
 
 const LANGUAGE_STORAGE_KEY = "tideops-language";
 const LANGUAGE_EVENT = "tideops-language-change";
@@ -180,6 +180,7 @@ interface AppContextValue extends WorkspaceData {
   ) => Promise<ActionResult>;
   submitSafetyCheckin: (payload: {
     projectId: string;
+    date: string;
     shift: string;
     facilitator: string;
     taskTypes: string[];
@@ -188,10 +189,45 @@ interface AppContextValue extends WorkspaceData {
     briefingTopic: string;
     notes: string;
   }) => Promise<ActionResult>;
+  updateSafetyCheckin: (payload: {
+    id: string;
+    projectId: string;
+    date: string;
+    shift: string;
+    facilitator: string;
+    taskTypes: string[];
+    hazards: string[];
+    ppe: string[];
+    briefingTopic: string;
+    notes: string;
+  }) => Promise<ActionResult>;
+  updateAttendanceLog: (payload: {
+    id: string;
+    projectId: string;
+    date: string;
+    clockInTime: string;
+    clockOutTime: string;
+    clockInLocation: string;
+    clockOutLocation: string;
+    note: string;
+  }) => Promise<ActionResult>;
   deleteAttendanceLog: (attendanceLogId: string) => Promise<ActionResult>;
   deleteSafetyCheckin: (safetyCheckinId: string) => Promise<ActionResult>;
   submitDailyReport: (payload: {
     projectId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    majorTasks: MediaListDraftItem[];
+    blockers: MediaListDraftItem[];
+    nextDayPlan: MediaListDraftItem[];
+  }) => Promise<ActionResult>;
+  updateDailyReport: (payload: {
+    id: string;
+    projectId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
     majorTasks: MediaListDraftItem[];
     blockers: MediaListDraftItem[];
     nextDayPlan: MediaListDraftItem[];
@@ -199,6 +235,18 @@ interface AppContextValue extends WorkspaceData {
   deleteDailyReport: (dailyReportId: string) => Promise<ActionResult>;
   submitIncident: (payload: {
     projectId: string;
+    occurredAt: string;
+    incidentType: string;
+    severity: "low" | "medium" | "high";
+    facts: MediaListDraftItem[];
+    immediateActions: MediaListDraftItem[];
+    followUps: MediaListDraftItem[];
+    escalationRequired: boolean;
+  }) => Promise<ActionResult>;
+  updateIncident: (payload: {
+    id: string;
+    projectId: string;
+    occurredAt: string;
     incidentType: string;
     severity: "low" | "medium" | "high";
     facts: MediaListDraftItem[];
@@ -312,6 +360,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : "Only operations managers can delete records.";
   }
 
+  function getRecordEditNotAllowedMessage() {
+    return language === "zh"
+      ? "你只能修改自己的记录，运营经理可以修改全部记录。"
+      : "You can edit only your own records. Operations managers can edit all records.";
+  }
+
+  function canEditOwnedRecord(ownerUserId: string) {
+    return Boolean(currentUser && (ownerUserId === currentUser.id || isOperationsManager));
+  }
+
+  function getAttendanceStatusFromTimes(
+    clockInTime: string | null | undefined,
+    clockOutTime: string | null | undefined,
+  ) {
+    if (clockInTime && clockOutTime) {
+      return "present" as const;
+    }
+
+    if (clockInTime) {
+      return "partial" as const;
+    }
+
+    if (clockOutTime) {
+      return "missing_clock_in" as const;
+    }
+
+    return "partial" as const;
+  }
+
   function getBrowserOrigin() {
     if (typeof window !== "undefined") {
       return window.location.origin;
@@ -412,7 +489,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       result.push({
         text,
-        attachments,
+        attachments: [...item.existingAttachments, ...attachments],
       });
     }
 
@@ -493,11 +570,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase
         .from("safety_checkins")
         .select("*")
-        .order("date", { ascending: false }),
+        .order("created_at", { ascending: false }),
       supabase
         .from("daily_reports")
         .select("*")
-        .order("date", { ascending: false }),
+        .order("created_at", { ascending: false }),
       supabase
         .from("incidents")
         .select("*")
@@ -1320,6 +1397,67 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
+  async function syncAttendanceFromReport(payload: {
+    userId: string;
+    homeCompanyId: string;
+    projectId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    note: string;
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    if (!payload.homeCompanyId) {
+      return { ok: false, error: "Assign a home company before syncing attendance." };
+    }
+
+    const project = workspace.projects.find((item) => item.id === payload.projectId);
+    const existingLog = workspace.attendanceLogs.find(
+      (item) => item.userId === payload.userId && item.date === payload.date,
+    );
+    const nextClockInTime =
+      existingLog?.clockInTime ??
+      (payload.startTime ? combineLocalDateAndTime(payload.date, payload.startTime) : null);
+    const nextClockOutTime =
+      existingLog?.clockOutTime ??
+      (payload.endTime ? combineLocalDateAndTime(payload.date, payload.endTime) : null);
+
+    if (!existingLog && !nextClockInTime && !nextClockOutTime) {
+      return { ok: true };
+    }
+
+    const row = {
+      user_id: payload.userId,
+      home_company_id: payload.homeCompanyId,
+      project_id: payload.projectId || existingLog?.projectId || null,
+      service_company_id: project?.customerFacingCompanyId ?? null,
+      date: payload.date,
+      clock_in_time: nextClockInTime,
+      clock_out_time: nextClockOutTime,
+      clock_in_location: existingLog?.clockInLocation ?? null,
+      clock_out_location: existingLog?.clockOutLocation ?? null,
+      note: existingLog?.note?.trim() || payload.note.trim() || null,
+      attendance_status: getAttendanceStatusFromTimes(nextClockInTime, nextClockOutTime),
+    };
+
+    const query = existingLog
+      ? supabase.from("attendance_logs").update(row).eq("id", existingLog.id)
+      : supabase.from("attendance_logs").insert(row);
+
+    const { error } = await query;
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  }
+
   async function clockIn(payload: {
     projectId: string;
     note: string;
@@ -1398,6 +1536,64 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     await insertAuditLog("Attendance clock out", "attendance", currentLog.id);
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function updateAttendanceLog(payload: {
+    id: string;
+    projectId: string;
+    date: string;
+    clockInTime: string;
+    clockOutTime: string;
+    clockInLocation: string;
+    clockOutLocation: string;
+    note: string;
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    const target = workspace.attendanceLogs.find((item) => item.id === payload.id);
+
+    if (!target) {
+      return { ok: false, error: language === "zh" ? "考勤记录不存在。" : "Attendance log not found." };
+    }
+
+    if (!canEditOwnedRecord(target.userId)) {
+      return { ok: false, error: getRecordEditNotAllowedMessage() };
+    }
+
+    const project = workspace.projects.find((item) => item.id === payload.projectId);
+    const nextClockInTime = payload.clockInTime
+      ? combineLocalDateAndTime(payload.date, payload.clockInTime)
+      : null;
+    const nextClockOutTime = payload.clockOutTime
+      ? combineLocalDateAndTime(payload.date, payload.clockOutTime)
+      : null;
+
+    const { error } = await supabase
+      .from("attendance_logs")
+      .update({
+        project_id: payload.projectId || null,
+        service_company_id: project?.customerFacingCompanyId ?? null,
+        date: payload.date,
+        clock_in_time: nextClockInTime,
+        clock_out_time: nextClockOutTime,
+        clock_in_location: payload.clockInLocation.trim() || null,
+        clock_out_location: payload.clockOutLocation.trim() || null,
+        note: payload.note.trim() || null,
+        attendance_status: getAttendanceStatusFromTimes(nextClockInTime, nextClockOutTime),
+      })
+      .eq("id", payload.id);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Attendance log updated", "attendance_log", payload.id);
     await refreshWorkspace();
     return { ok: true };
   }
@@ -1511,6 +1707,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function submitSafetyCheckin(payload: {
     projectId: string;
+    date: string;
     shift: string;
     facilitator: string;
     taskTypes: string[];
@@ -1541,7 +1738,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         site_id: site.id,
         project_id: project.id,
         render_company_id: project.customerFacingCompanyId,
-        date: getLocalDateString(),
+        date: payload.date,
         shift: payload.shift,
         author_user_id: currentUser.id,
         facilitator: payload.facilitator.trim() || currentUser.fullName,
@@ -1563,6 +1760,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     await insertAuditLog("Safety check-in submitted", "safety_checkin", String(data.id));
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function updateSafetyCheckin(payload: {
+    id: string;
+    projectId: string;
+    date: string;
+    shift: string;
+    facilitator: string;
+    taskTypes: string[];
+    hazards: string[];
+    ppe: string[];
+    briefingTopic: string;
+    notes: string;
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    const target = workspace.safetyCheckins.find((item) => item.id === payload.id);
+    const project = workspace.projects.find((item) => item.id === payload.projectId);
+    const site = project
+      ? workspace.sites.find((item) => item.id === project.siteId)
+      : undefined;
+
+    if (!target) {
+      return { ok: false, error: language === "zh" ? "安全签到不存在。" : "Safety check-in not found." };
+    }
+
+    if (!canEditOwnedRecord(target.authorUserId)) {
+      return { ok: false, error: getRecordEditNotAllowedMessage() };
+    }
+
+    if (!project || !site) {
+      return { ok: false, error: getProjectRequiredMessage() };
+    }
+
+    const { error } = await supabase
+      .from("safety_checkins")
+      .update({
+        client_id: project.clientId,
+        site_id: site.id,
+        project_id: project.id,
+        render_company_id: project.customerFacingCompanyId,
+        date: payload.date,
+        shift: payload.shift,
+        facilitator: payload.facilitator.trim() || currentUser.fullName,
+        planned_start_time: project.shiftStartTime || null,
+        planned_end_time: project.shiftEndTime || null,
+        task_types_json: payload.taskTypes,
+        hazard_flags_json: payload.hazards,
+        ppe_flags_json: payload.ppe,
+        briefing_topic: payload.briefingTopic.trim(),
+        notes: payload.notes.trim(),
+      })
+      .eq("id", payload.id);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Safety check-in updated", "safety_checkin", payload.id);
     await refreshWorkspace();
     return { ok: true };
   }
@@ -1628,6 +1890,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function submitDailyReport(payload: {
     projectId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
     majorTasks: MediaListDraftItem[];
     blockers: MediaListDraftItem[];
     nextDayPlan: MediaListDraftItem[];
@@ -1646,7 +1911,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (item) =>
         item.authorUserId === currentUser.id &&
         item.projectId === payload.projectId &&
-        item.date === getLocalDateString(),
+        item.date === payload.date,
     );
 
     if (!project || !site) {
@@ -1687,8 +1952,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Add at least one next-day plan item before submitting.",
       };
     }
-    const startTime = project.shiftStartTime || null;
-    const endTime = project.shiftEndTime || null;
+    const startTime = payload.startTime || project.shiftStartTime || "";
+    const endTime = payload.endTime || project.shiftEndTime || "";
     const shift =
       linkedCheckin?.shift || (project.shiftStartTime && project.shiftEndTime ? "Day" : "Field");
 
@@ -1709,12 +1974,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         project_id: project.id,
         render_company_id: project.customerFacingCompanyId,
         safety_checkin_id: linkedCheckin?.id ?? null,
-        date: getLocalDateString(),
+        date: payload.date,
         shift,
         author_user_id: currentUser.id,
         major_tasks: majorTaskItems.map((item) => item.text).join("\n"),
-        start_time: startTime,
-        end_time: endTime,
+        start_time: startTime || null,
+        end_time: endTime || null,
         labor_hours: laborHours,
         issue_summary: blockerItems.map((item) => item.text).join("\n") || null,
         corrective_action: null,
@@ -1734,7 +1999,141 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: error.message };
     }
 
+    const attendanceSync = await syncAttendanceFromReport({
+      userId: currentUser.id,
+      homeCompanyId: currentUser.homeCompanyId ?? "",
+      projectId: payload.projectId,
+      date: payload.date,
+      startTime,
+      endTime,
+      note: language === "zh" ? "日报同步考勤时间" : "Attendance synced from daily report",
+    });
+
+    if (!attendanceSync.ok) {
+      return attendanceSync;
+    }
+
     await insertAuditLog("Daily report submitted", "daily_report", String(data.id));
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function updateDailyReport(payload: {
+    id: string;
+    projectId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    majorTasks: MediaListDraftItem[];
+    blockers: MediaListDraftItem[];
+    nextDayPlan: MediaListDraftItem[];
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    const target = workspace.dailyReports.find((item) => item.id === payload.id);
+    const project = workspace.projects.find((item) => item.id === payload.projectId);
+    const site = project
+      ? workspace.sites.find((item) => item.id === project.siteId)
+      : undefined;
+    const linkedCheckin = workspace.safetyCheckins.find(
+      (item) =>
+        item.authorUserId === (target?.authorUserId ?? currentUser.id) &&
+        item.projectId === payload.projectId &&
+        item.date === payload.date,
+    );
+
+    if (!target) {
+      return { ok: false, error: language === "zh" ? "日报不存在。" : "Daily report not found." };
+    }
+
+    if (!canEditOwnedRecord(target.authorUserId)) {
+      return { ok: false, error: getRecordEditNotAllowedMessage() };
+    }
+
+    if (!project || !site) {
+      return { ok: false, error: getProjectRequiredMessage() };
+    }
+
+    const majorTaskItems = await uploadDraftItems("daily-report", "major-task", payload.majorTasks);
+    const blockerItems = await uploadDraftItems("daily-report", "blocker", payload.blockers);
+    const nextDayPlanItems = await uploadDraftItems(
+      "daily-report",
+      "next-day",
+      payload.nextDayPlan,
+    );
+
+    if (!majorTaskItems || !blockerItems || !nextDayPlanItems) {
+      return { ok: false, error: getPhotoUploadErrorMessage() };
+    }
+
+    if (majorTaskItems.length === 0 || nextDayPlanItems.length === 0) {
+      return {
+        ok: false,
+        error:
+          language === "zh"
+            ? "请至少保留 major task 和 next-day plan。"
+            : "Keep at least one major task and one next-day plan item.",
+      };
+    }
+
+    let laborHours: number | null = null;
+
+    if (payload.startTime && payload.endTime) {
+      const [startHour, startMinute] = payload.startTime.split(":").map(Number);
+      const [endHour, endMinute] = payload.endTime.split(":").map(Number);
+      laborHours =
+        Math.max(endHour * 60 + endMinute - (startHour * 60 + startMinute), 0) / 60;
+    }
+
+    const { error } = await supabase
+      .from("daily_reports")
+      .update({
+        client_id: project.clientId,
+        site_id: site.id,
+        project_id: project.id,
+        render_company_id: project.customerFacingCompanyId,
+        safety_checkin_id: linkedCheckin?.id ?? null,
+        date: payload.date,
+        shift: linkedCheckin?.shift || target.shift,
+        major_tasks: majorTaskItems.map((item) => item.text).join("\n"),
+        start_time: payload.startTime || null,
+        end_time: payload.endTime || null,
+        labor_hours: laborHours,
+        issue_summary: blockerItems.map((item) => item.text).join("\n") || null,
+        issue_status: blockerItems.length > 0 ? "monitoring" : "resolved",
+        next_day_plan: nextDayPlanItems.map((item) => item.text).join("\n"),
+        blockers: blockerItems.map((item) => item.text).join("\n") || null,
+        major_tasks_items_json: majorTaskItems,
+        blocker_items_json: blockerItems,
+        next_day_plan_items_json: nextDayPlanItems,
+      })
+      .eq("id", payload.id);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    const attendanceSync = await syncAttendanceFromReport({
+      userId: target.authorUserId,
+      homeCompanyId:
+        workspace.profiles.find((profile) => profile.id === target.authorUserId)
+          ?.homeCompanyId ?? "",
+      projectId: payload.projectId,
+      date: payload.date,
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+      note: language === "zh" ? "日报同步考勤时间" : "Attendance synced from daily report",
+    });
+
+    if (!attendanceSync.ok) {
+      return attendanceSync;
+    }
+
+    await insertAuditLog("Daily report updated", "daily_report", payload.id);
     await refreshWorkspace();
     return { ok: true };
   }
@@ -1778,6 +2177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function submitIncident(payload: {
     projectId: string;
+    occurredAt: string;
     incidentType: string;
     severity: "low" | "medium" | "high";
     facts: MediaListDraftItem[];
@@ -1842,7 +2242,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         project_id: project.id,
         render_company_id: project.customerFacingCompanyId,
         reporter_user_id: currentUser.id,
-        occurred_at: new Date().toISOString(),
+        occurred_at: payload.occurredAt,
         incident_type: payload.incidentType.trim(),
         severity: payload.severity,
         description: factItems.map((item) => item.text).join("\n"),
@@ -1862,6 +2262,99 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     await insertAuditLog("Incident submitted", "incident", String(data.id));
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function updateIncident(payload: {
+    id: string;
+    projectId: string;
+    occurredAt: string;
+    incidentType: string;
+    severity: "low" | "medium" | "high";
+    facts: MediaListDraftItem[];
+    immediateActions: MediaListDraftItem[];
+    followUps: MediaListDraftItem[];
+    escalationRequired: boolean;
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase || !currentUser) {
+      return { ok: false, error: getSignInRequiredMessage() };
+    }
+
+    const target = workspace.incidents.find((item) => item.id === payload.id);
+    const project = workspace.projects.find((item) => item.id === payload.projectId);
+    const site = project
+      ? workspace.sites.find((item) => item.id === project.siteId)
+      : undefined;
+
+    if (!target) {
+      return { ok: false, error: language === "zh" ? "异常不存在。" : "Incident not found." };
+    }
+
+    if (!canEditOwnedRecord(target.reporterUserId)) {
+      return { ok: false, error: getRecordEditNotAllowedMessage() };
+    }
+
+    if (!project || !site) {
+      return { ok: false, error: getProjectRequiredMessage() };
+    }
+
+    const factItems = await uploadDraftItems("incident", "fact", payload.facts);
+    const immediateActionItems = await uploadDraftItems(
+      "incident",
+      "immediate-action",
+      payload.immediateActions,
+    );
+    const followUpItems = await uploadDraftItems("incident", "follow-up", payload.followUps);
+
+    if (!factItems || !immediateActionItems || !followUpItems) {
+      return { ok: false, error: getPhotoUploadErrorMessage() };
+    }
+
+    if (factItems.length === 0 || immediateActionItems.length === 0) {
+      return {
+        ok: false,
+        error:
+          language === "zh"
+            ? "请至少保留异常事实和即时动作。"
+            : "Keep at least one fact item and one immediate action item.",
+      };
+    }
+
+    const { error } = await supabase
+      .from("incidents")
+      .update({
+        client_id: project.clientId,
+        site_id: site.id,
+        project_id: project.id,
+        render_company_id: project.customerFacingCompanyId,
+        occurred_at: payload.occurredAt,
+        incident_type: payload.incidentType.trim(),
+        severity: payload.severity,
+        description: factItems.map((item) => item.text).join("\n"),
+        immediate_action: immediateActionItems.map((item) => item.text).join("\n"),
+        escalation_required: payload.escalationRequired,
+        corrective_action: followUpItems.map((item) => item.text).join("\n") || null,
+        fact_items_json: factItems,
+        immediate_action_items_json: immediateActionItems,
+        follow_up_items_json: followUpItems,
+        status: payload.escalationRequired
+          ? target.status === "closed"
+            ? "closed"
+            : "under_review"
+          : target.status === "closed"
+            ? "closed"
+            : "open",
+      })
+      .eq("id", payload.id);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Incident updated", "incident", payload.id);
     await refreshWorkspace();
     return { ok: true };
   }
@@ -1963,14 +2456,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateProjectAssignment,
     clockIn,
     clockOut,
+    updateAttendanceLog,
     submitLeave,
     reviewLeave,
     submitSafetyCheckin,
+    updateSafetyCheckin,
     deleteAttendanceLog,
     deleteSafetyCheckin,
     submitDailyReport,
+    updateDailyReport,
     deleteDailyReport,
     submitIncident,
+    updateIncident,
     deleteIncident,
     toggleIncidentStatus,
   };

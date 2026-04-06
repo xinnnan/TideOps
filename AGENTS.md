@@ -135,8 +135,12 @@ After finishing any meaningful task:
 - Verified on `2026-04-06`: deleting a safety check-in can fail if a daily report still points at it through `daily_reports.safety_checkin_id`. The safe delete flow is to null out those references first, then remove the safety record.
 - For daily reports and incidents, keep numbered-list entry strictly item-by-item. Do not reintroduce multi-line paste that automatically splits text into multiple numbered items.
 - In report and incident numbered-list entry, keep the add action inside the list input area, near the current items. Do not move the add button back up into the section header row.
+- Updated on `2026-04-06`: if an edit flow can keep previously uploaded images, draft state must store existing attachment paths separately from new `File` uploads. On save, merge the stored paths back into the item JSON instead of treating all attachments as fresh uploads.
+- Updated on `2026-04-06`: helper functions that sync related records during manager edits must accept the target record owner explicitly. Do not infer the owner from the current session user, or manager edits will write attendance updates onto the manager instead of the original engineer.
+- Updated on `2026-04-06`: allowing multiple safety check-ins or daily reports on the same day requires dropping the old per-user per-project per-date unique constraints and relying on dedicated `record_number` sequences. Once that exists, list loading should sort by `created_at desc`, not only by `date`, so same-day entries stay in the right order.
 - In report and incident feeds, service engineers should only see and search their own records. Operations managers can see all records and should get filter controls such as reporter, project, site, and date.
 - Verified on `2026-04-06`: `Report` and `Incident` already follow the intended role split, and `Attendance` also hides team summary views from engineers. `Safety` still does not yet match that access model; its recent-record and summary sections still read from the full `safetyCheckins` list for all users. Safety PDF export is now implemented.
+- Updated on `2026-04-06`: `Safety` now follows the same role split as report and incident in the app UI. Engineers see only their own safety records and summaries, while operations managers retain the full cross-team view.
 - In Next.js 16 app routes, avoid `useSearchParams()` directly in statically built pages unless you intentionally wrap the read in `Suspense`. For simple client-only notices on login-like pages, reading `window.location.search` after hydration is the simpler path.
 - For auth/session effects in React 19, prefer `useEffectEvent` when the effect needs the latest async loader without creating dependency churn.
 - For TideOps page chrome, avoid stacking multiple translucent shells on top of tinted or gradient canvases. A flat app background plus solid surface cards is more stable and prevents visible color banding across long forms and admin workspaces.
@@ -156,22 +160,24 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Refresh the README so it is easier for users and deployers to understand what TideOps does, how to start it, and how to deploy it.
+- Add editable submitted field records and attendance/report linkage. Safety check-ins, daily reports, and incidents now support edit for the original author and operations managers. Attendance now reminds users to clock out after clock-in, allows self-edit and manager-edit, and stays manager-delete-only. Safety, daily report, and incident records also use stable incrementing numbers so multiple same-day submissions are possible, and daily reports now carry arrival/departure times that can sync into attendance automatically.
 
 Checklist:
 
-- [x] Re-read project continuity notes before editing the README
-- [x] Review the current README structure
-- [x] Rewrite the README with clearer user-facing and deployer-facing sections
-- [ ] Commit and push the README update after review
+- [x] Re-read project continuity notes and inspect the current provider, pages, and schema
+- [x] Add record-number fields and same-day multi-entry support to the schema and mapping layer
+- [x] Finish provider update flows for attendance, safety, daily report, and incident editing
+- [x] Add attendance reminder and edit UI on the attendance page
+- [x] Add edit flows and record numbers on safety, report, and incident pages
+- [x] Add daily report attendance-time inputs with attendance auto-fill and sync-back
+- [x] Run lint/build and update continuity notes with any new durable rules
 
 Most likely next tasks:
 
-- [ ] After Vercel auth is available, use `.env.local` as the source of truth for the two public env vars
-- [ ] After the deploy finishes, test `/login` and `/reset-password` on the Vercel domain
-- [ ] Add the Vercel production URL back into Supabase `Site URL` and redirect allow list
-- [ ] If TideOps later needs more visual atmosphere, reintroduce it through one controlled background treatment instead of stacking multiple translucent overlays
-- [ ] Keep tightening remaining admin copy so feature names stay clear without slipping back into implementation vocabulary
+- [ ] Apply `supabase/migrations/20260406231500_add_record_numbers_and_multientry_support.sql` in Supabase before testing multiple same-day safety/report/incident entries in a deployed environment
+- [ ] If record numbers need a different visible prefix later, add it at the presentation layer without changing the numeric sequence source of truth
+- [ ] If users need to remove already-uploaded report or incident photos during edit, add explicit stored-attachment removal instead of dropping paths implicitly
+- [ ] If attendance later needs project-level or user-level search for managers, keep the edit workflow in a dedicated editor panel instead of putting full edit controls inside every summary card
 
 Scratchpad rules:
 

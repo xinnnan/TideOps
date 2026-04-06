@@ -13,7 +13,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAppState } from "@/components/providers/app-provider";
-import { createDraftMediaListItem } from "@/lib/media-items";
+import {
+  createDraftMediaItemsFromStoredItems,
+  createDraftMediaListItem,
+} from "@/lib/media-items";
 import { exportIncidentPdf } from "@/lib/pdf-export";
 import type { MediaListItem } from "@/lib/types";
 import { formatDisplayDateTime } from "@/lib/utils";
@@ -26,6 +29,18 @@ function getIncidentLabel(status: string, language: "en" | "zh") {
   } as const;
 
   return labels[status as keyof typeof labels]?.[language] ?? status;
+}
+
+function getNowLocalDateTimeValue() {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function toDateTimeLocalValue(value: string) {
+  const date = new Date(value);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 export default function IncidentPage() {
@@ -41,13 +56,16 @@ export default function IncidentPage() {
     sites,
     submitIncident,
     toggleIncidentStatus,
+    updateIncident,
   } = useAppState();
   const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const [occurredAt, setOccurredAt] = useState(getNowLocalDateTimeValue());
   const [incidentType, setIncidentType] = useState("Near miss");
   const [severity, setSeverity] = useState<"low" | "medium" | "high">("medium");
   const [facts, setFacts] = useState([createDraftMediaListItem()]);
   const [immediateActions, setImmediateActions] = useState([createDraftMediaListItem()]);
   const [followUps, setFollowUps] = useState([createDraftMediaListItem()]);
+  const [editingIncidentId, setEditingIncidentId] = useState<string | null>(null);
   const [escalationRequired, setEscalationRequired] = useState(true);
   const [feedback, setFeedback] = useState("");
   const [feedSearch, setFeedSearch] = useState("");
@@ -68,6 +86,7 @@ export default function IncidentPage() {
           capturePhotoLabel: "拍摄",
           closeCameraLabel: "关闭摄像头",
           cameraUnavailableLabel: "无法打开摄像头，请检查权限，或改用加图。",
+          existingPhotosLabelTemplate: "保存时会保留这 {count} 张已有照片。",
         }
       : {
           pickPhotoLabel: "Add photo",
@@ -77,6 +96,8 @@ export default function IncidentPage() {
           capturePhotoLabel: "Capture",
           closeCameraLabel: "Close camera",
           cameraUnavailableLabel: "Could not open the camera. Check permission or use Add photo.",
+          existingPhotosLabelTemplate:
+            "{count} existing photo(s) will be kept when you save.",
         };
 
   const visibleIncidents = useMemo(
@@ -96,6 +117,7 @@ export default function IncidentPage() {
       const reporter = profiles.find((item) => item.id === incident.reporterUserId);
       const incidentDate = incident.occurredAt.slice(0, 10);
       const allText = [
+        String(incident.recordNumber),
         incident.incidentType,
         incident.severity,
         incident.description,
@@ -172,24 +194,74 @@ export default function IncidentPage() {
       .sort((left, right) => left.fullName.localeCompare(right.fullName));
   }, [incidents, profiles]);
 
+  function resetForm() {
+    setEditingIncidentId(null);
+    setProjectId(projects[0]?.id ?? "");
+    setOccurredAt(getNowLocalDateTimeValue());
+    setIncidentType("Near miss");
+    setSeverity("medium");
+    setFacts([createDraftMediaListItem()]);
+    setImmediateActions([createDraftMediaListItem()]);
+    setFollowUps([createDraftMediaListItem()]);
+    setEscalationRequired(true);
+  }
+
   async function handleSubmit() {
-    const result = await submitIncident({
+    const payload = {
       projectId,
+      occurredAt: new Date(occurredAt).toISOString(),
       incidentType,
       severity,
       facts,
       immediateActions,
       followUps,
       escalationRequired,
-    });
+    } as const;
 
-    setFeedback(result.ok ? copy.incident.submitSuccess : result.error ?? "");
+    const result = editingIncidentId
+      ? await updateIncident({
+          id: editingIncidentId,
+          ...payload,
+        })
+      : await submitIncident(payload);
 
-    if (result.ok) {
-      setFacts([createDraftMediaListItem()]);
-      setImmediateActions([createDraftMediaListItem()]);
-      setFollowUps([createDraftMediaListItem()]);
+    if (!result.ok) {
+      setFeedback(result.error ?? "");
+      return;
     }
+
+    setFeedback(
+      editingIncidentId
+        ? language === "zh"
+          ? "异常记录已更新。"
+          : "Incident updated."
+        : copy.incident.submitSuccess,
+    );
+    resetForm();
+  }
+
+  function startEditing(incidentId: string) {
+    const incident = incidents.find((item) => item.id === incidentId);
+
+    if (!incident) {
+      return;
+    }
+
+    setEditingIncidentId(incident.id);
+    setProjectId(incident.projectId);
+    setOccurredAt(toDateTimeLocalValue(incident.occurredAt));
+    setIncidentType(incident.incidentType);
+    setSeverity(incident.severity);
+    setFacts(createDraftMediaItemsFromStoredItems(incident.factItems));
+    setImmediateActions(createDraftMediaItemsFromStoredItems(incident.immediateActionItems));
+    setFollowUps(createDraftMediaItemsFromStoredItems(incident.followUpItems));
+    setEscalationRequired(incident.escalationRequired);
+    setFeedback(
+      language === "zh"
+        ? `正在编辑异常 #${incident.recordNumber}`
+        : `Editing incident #${incident.recordNumber}`,
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function renderItemList(items: MediaListItem[]) {
@@ -256,7 +328,14 @@ export default function IncidentPage() {
         title={copy.incident.title}
         description={copy.incident.description}
         badges={[
-          { label: copy.incident.newRecord, tone: "brand" },
+          {
+            label: editingIncidentId
+              ? language === "zh"
+                ? "编辑异常"
+                : "Edit incident"
+              : copy.incident.newRecord,
+            tone: "brand",
+          },
           { label: copy.incident.incidentFeed, tone: "danger" },
         ]}
       />
@@ -264,9 +343,16 @@ export default function IncidentPage() {
       <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
         <Card className="bg-slate-950 text-white">
           <CardHeader>
-            <CardEyebrow className="text-white/50">{copy.incident.newRecord}</CardEyebrow>
+            <CardEyebrow className="text-white/50">
+              {editingIncidentId
+                ? language === "zh"
+                  ? "编辑异常"
+                  : "Edit incident"
+                : copy.incident.newRecord}
+            </CardEyebrow>
             <CardTitle className="text-white">
-              {projects.find((project) => project.id === projectId)?.name}
+              {projects.find((project) => project.id === projectId)?.name ??
+                (language === "zh" ? "选择项目" : "Choose a project")}
             </CardTitle>
             <CardDescription className="text-white/70">
               {language === "zh"
@@ -275,7 +361,7 @@ export default function IncidentPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2">
                 <span className="text-sm font-medium">{copy.attendance.project}</span>
                 <select
@@ -290,6 +376,20 @@ export default function IncidentPage() {
                   ))}
                 </select>
               </label>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">
+                  {language === "zh" ? "发生时间" : "Occurred at"}
+                </span>
+                <input
+                  type="datetime-local"
+                  value={occurredAt}
+                  onChange={(event) => setOccurredAt(event.target.value)}
+                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2">
                 <span className="text-sm font-medium">{copy.incident.incidentType}</span>
                 <select
@@ -348,6 +448,7 @@ export default function IncidentPage() {
               capturePhotoLabel={mediaCopy.capturePhotoLabel}
               closeCameraLabel={mediaCopy.closeCameraLabel}
               cameraUnavailableLabel={mediaCopy.cameraUnavailableLabel}
+              existingPhotosLabelTemplate={mediaCopy.existingPhotosLabelTemplate}
             />
 
             <NumberedListComposer
@@ -378,6 +479,7 @@ export default function IncidentPage() {
               capturePhotoLabel={mediaCopy.capturePhotoLabel}
               closeCameraLabel={mediaCopy.closeCameraLabel}
               cameraUnavailableLabel={mediaCopy.cameraUnavailableLabel}
+              existingPhotosLabelTemplate={mediaCopy.existingPhotosLabelTemplate}
             />
 
             <NumberedListComposer
@@ -404,6 +506,7 @@ export default function IncidentPage() {
               capturePhotoLabel={mediaCopy.capturePhotoLabel}
               closeCameraLabel={mediaCopy.closeCameraLabel}
               cameraUnavailableLabel={mediaCopy.cameraUnavailableLabel}
+              existingPhotosLabelTemplate={mediaCopy.existingPhotosLabelTemplate}
             />
 
             <label className="flex items-center gap-3 rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm">
@@ -422,13 +525,24 @@ export default function IncidentPage() {
               </div>
             ) : null}
 
-            <button
-              type="button"
-              onClick={() => void handleSubmit()}
-              className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950"
-            >
-              {copy.common.submit}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void handleSubmit()}
+                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950"
+              >
+                {editingIncidentId ? copy.common.save : copy.common.submit}
+              </button>
+              {editingIncidentId ? (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white"
+                >
+                  {copy.common.cancel}
+                </button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
 
@@ -450,7 +564,7 @@ export default function IncidentPage() {
             <div className="space-y-3">
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-slate-700">
-                  {language === "zh" ? "搜索内容 / 项目 / 站点" : "Search content / project / site"}
+                  {language === "zh" ? "搜索编号 / 内容 / 项目 / 站点" : "Search ID / content / project / site"}
                 </span>
                 <input
                   type="search"
@@ -586,6 +700,8 @@ export default function IncidentPage() {
                     (site) =>
                       site.id === projects.find((project) => project.id === incident.projectId)?.siteId,
                   )?.name ?? "--";
+                const canEdit =
+                  isOperationsManager || incident.reporterUserId === currentUser?.id;
 
                 return (
                   <div
@@ -594,9 +710,12 @@ export default function IncidentPage() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="font-medium text-slate-900">
-                          {projects.find((project) => project.id === incident.projectId)?.name}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-slate-900">
+                            {projects.find((project) => project.id === incident.projectId)?.name}
+                          </p>
+                          <Badge tone="signal">#{incident.recordNumber}</Badge>
+                        </div>
                         <p className="text-sm text-slate-600">
                           {formatDisplayDateTime(incident.occurredAt, language)} · {siteName} ·{" "}
                           {reporterName}
@@ -684,51 +803,46 @@ export default function IncidentPage() {
                           </ul>
                         </div>
                       ) : null}
-
-                      {incident.attachments.length > 0 ? (
-                        <p className="text-xs font-medium text-slate-500">
-                          {language === "zh"
-                            ? `已附 ${incident.attachments.length} 张照片`
-                            : `${incident.attachments.length} photo(s) attached`}
-                        </p>
-                      ) : null}
                     </div>
 
-                    {isOperationsManager ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {canEdit ? (
                         <button
                           type="button"
-                          onClick={() => void handleDelete(incident.id)}
-                          className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600"
-                        >
-                          {copy.common.delete}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleToggleStatus(incident.id)}
+                          onClick={() => startEditing(incident.id)}
                           className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
                         >
-                          {incident.status === "closed"
-                            ? copy.incident.reopen
-                            : copy.incident.close}
+                          {copy.common.edit}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleExport(incident.id)}
-                          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
-                        >
-                          {language === "zh" ? "导出 PDF" : "Export PDF"}
-                        </button>
-                      </div>
-                    ) : (
+                      ) : null}
+                      {isOperationsManager ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(incident.id)}
+                            className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600"
+                          >
+                            {copy.common.delete}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleStatus(incident.id)}
+                            className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                          >
+                            {incident.status === "closed"
+                              ? copy.incident.reopen
+                              : copy.incident.close}
+                          </button>
+                        </>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => void handleExport(incident.id)}
-                        className="mt-4 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                        className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
                       >
                         {language === "zh" ? "导出 PDF" : "Export PDF"}
                       </button>
-                    )}
+                    </div>
                   </div>
                 );
               })

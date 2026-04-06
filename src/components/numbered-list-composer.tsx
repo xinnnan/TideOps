@@ -23,6 +23,7 @@ interface NumberedListComposerProps {
   capturePhotoLabel: string;
   closeCameraLabel: string;
   cameraUnavailableLabel: string;
+  existingPhotosLabelTemplate?: string;
 }
 
 function ItemPhotos({
@@ -35,6 +36,7 @@ function ItemPhotos({
   capturePhotoLabel,
   closeCameraLabel,
   cameraUnavailableLabel,
+  existingPhotosLabelTemplate,
   onAppendFiles,
   onRemoveFile,
 }: {
@@ -47,6 +49,7 @@ function ItemPhotos({
   capturePhotoLabel: string;
   closeCameraLabel: string;
   cameraUnavailableLabel: string;
+  existingPhotosLabelTemplate?: string;
   onAppendFiles: (files: File[]) => void;
   onRemoveFile: (fileIndex: number) => void;
 }) {
@@ -304,6 +307,18 @@ function ItemPhotos({
         </p>
       ) : null}
 
+      {item.existingAttachments.length > 0 ? (
+        <div
+          className={cn(
+            "mt-3 rounded-2xl border px-3 py-3 text-xs leading-5",
+            dark ? "border-white/12 bg-white/6 text-white/65" : "border-slate-200 bg-white text-slate-500",
+          )}
+        >
+          {(existingPhotosLabelTemplate ?? "{count} existing photo(s) will be kept when you save.")
+            .replace("{count}", String(item.existingAttachments.length))}
+        </div>
+      ) : null}
+
       {previews.length > 0 ? (
         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {previews.map((preview, index) => (
@@ -367,6 +382,7 @@ export function NumberedListComposer({
   capturePhotoLabel,
   closeCameraLabel,
   cameraUnavailableLabel,
+  existingPhotosLabelTemplate,
 }: NumberedListComposerProps) {
   function addBlankItem() {
     onChange([...items, createDraftMediaListItem()]);
@@ -471,6 +487,7 @@ export function NumberedListComposer({
                       capturePhotoLabel={capturePhotoLabel}
                       closeCameraLabel={closeCameraLabel}
                       cameraUnavailableLabel={cameraUnavailableLabel}
+                      existingPhotosLabelTemplate={existingPhotosLabelTemplate}
                       onAppendFiles={(files) => appendFiles(index, files)}
                       onRemoveFile={(fileIndex) => removeFile(index, fileIndex)}
                     />

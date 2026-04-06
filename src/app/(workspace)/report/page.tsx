@@ -13,13 +13,38 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAppState } from "@/components/providers/app-provider";
-import { createDraftMediaListItem } from "@/lib/media-items";
+import {
+  createDraftMediaItemsFromStoredItems,
+  createDraftMediaListItem,
+} from "@/lib/media-items";
 import { exportDailyReportPdf } from "@/lib/pdf-export";
-import type { MediaListItem } from "@/lib/types";
-import { formatDisplayDate } from "@/lib/utils";
+import type { AttendanceLog, MediaListItem } from "@/lib/types";
+import {
+  extractTimeInputValue,
+  formatDisplayDate,
+  getLocalDateString,
+} from "@/lib/utils";
+
+function getReportDefaults(params: {
+  attendanceLogs: AttendanceLog[];
+  currentUserId?: string;
+  date: string;
+  fallbackProjectId: string;
+}) {
+  const matchingLog = params.attendanceLogs.find(
+    (log) => log.userId === params.currentUserId && log.date === params.date,
+  );
+
+  return {
+    projectId: matchingLog?.projectId ?? params.fallbackProjectId,
+    startTime: extractTimeInputValue(matchingLog?.clockInTime),
+    endTime: extractTimeInputValue(matchingLog?.clockOutTime),
+  };
+}
 
 export default function ReportPage() {
   const {
+    attendanceLogs,
     copy,
     currentUser,
     dailyReports,
@@ -30,11 +55,23 @@ export default function ReportPage() {
     projects,
     sites,
     submitDailyReport,
+    updateDailyReport,
   } = useAppState();
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const initialReportDate = getLocalDateString();
+  const initialReportDefaults = getReportDefaults({
+    attendanceLogs,
+    currentUserId: currentUser?.id,
+    date: initialReportDate,
+    fallbackProjectId: projects[0]?.id ?? "",
+  });
+  const [reportDate, setReportDate] = useState(initialReportDate);
+  const [projectId, setProjectId] = useState(initialReportDefaults.projectId);
+  const [startTime, setStartTime] = useState(initialReportDefaults.startTime);
+  const [endTime, setEndTime] = useState(initialReportDefaults.endTime);
   const [majorTasks, setMajorTasks] = useState([createDraftMediaListItem()]);
   const [blockers, setBlockers] = useState([createDraftMediaListItem()]);
   const [nextDayPlan, setNextDayPlan] = useState([createDraftMediaListItem()]);
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [feedSearch, setFeedSearch] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
@@ -52,6 +89,7 @@ export default function ReportPage() {
           capturePhotoLabel: "拍摄",
           closeCameraLabel: "关闭摄像头",
           cameraUnavailableLabel: "无法打开摄像头，请检查权限，或改用加图。",
+          existingPhotosLabelTemplate: "保存时会保留这 {count} 张已有照片。",
         }
       : {
           pickPhotoLabel: "Add photo",
@@ -61,6 +99,8 @@ export default function ReportPage() {
           capturePhotoLabel: "Capture",
           closeCameraLabel: "Close camera",
           cameraUnavailableLabel: "Could not open the camera. Check permission or use Add photo.",
+          existingPhotosLabelTemplate:
+            "{count} existing photo(s) will be kept when you save.",
         };
 
   const visibleReports = useMemo(
@@ -71,6 +111,14 @@ export default function ReportPage() {
     [currentUser?.id, dailyReports, isOperationsManager],
   );
 
+  const matchingAttendanceLog = useMemo(
+    () =>
+      attendanceLogs.find(
+        (log) => log.userId === currentUser?.id && log.date === reportDate,
+      ),
+    [attendanceLogs, currentUser?.id, reportDate],
+  );
+
   const filteredReports = useMemo(() => {
     const normalizedSearch = feedSearch.trim().toLowerCase();
 
@@ -79,6 +127,7 @@ export default function ReportPage() {
       const site = sites.find((item) => item.id === project?.siteId);
       const author = profiles.find((item) => item.id === report.authorUserId);
       const allText = [
+        String(report.recordNumber),
         report.majorTasks,
         report.blockers,
         report.nextDayPlan,
@@ -143,21 +192,96 @@ export default function ReportPage() {
       .sort((left, right) => left.fullName.localeCompare(right.fullName));
   }, [dailyReports, profiles]);
 
+  function resetForm(nextDate = getLocalDateString()) {
+    const defaults = getReportDefaults({
+      attendanceLogs,
+      currentUserId: currentUser?.id,
+      date: nextDate,
+      fallbackProjectId: projects[0]?.id ?? "",
+    });
+
+    setEditingReportId(null);
+    setReportDate(nextDate);
+    setProjectId(defaults.projectId);
+    setStartTime(defaults.startTime);
+    setEndTime(defaults.endTime);
+    setMajorTasks([createDraftMediaListItem()]);
+    setBlockers([createDraftMediaListItem()]);
+    setNextDayPlan([createDraftMediaListItem()]);
+  }
+
+  function handleDateChange(nextDate: string) {
+    setReportDate(nextDate);
+
+    if (editingReportId) {
+      return;
+    }
+
+    const defaults = getReportDefaults({
+      attendanceLogs,
+      currentUserId: currentUser?.id,
+      date: nextDate,
+      fallbackProjectId: projects[0]?.id ?? "",
+    });
+
+    setProjectId(defaults.projectId);
+    setStartTime(defaults.startTime);
+    setEndTime(defaults.endTime);
+  }
+
   async function handleSubmit() {
-    const result = await submitDailyReport({
+    const payload = {
       projectId,
+      date: reportDate,
+      startTime,
+      endTime,
       majorTasks,
       blockers,
       nextDayPlan,
-    });
+    };
+    const result = editingReportId
+      ? await updateDailyReport({
+          id: editingReportId,
+          ...payload,
+        })
+      : await submitDailyReport(payload);
 
-    setFeedback(result.ok ? copy.report.submitSuccess : result.error ?? "");
-
-    if (result.ok) {
-      setMajorTasks([createDraftMediaListItem()]);
-      setBlockers([createDraftMediaListItem()]);
-      setNextDayPlan([createDraftMediaListItem()]);
+    if (!result.ok) {
+      setFeedback(result.error ?? "");
+      return;
     }
+
+    setFeedback(
+      editingReportId
+        ? language === "zh"
+          ? "日报已更新。"
+          : "Daily report updated."
+        : copy.report.submitSuccess,
+    );
+    resetForm(reportDate);
+  }
+
+  function startEditing(reportId: string) {
+    const report = dailyReports.find((item) => item.id === reportId);
+
+    if (!report) {
+      return;
+    }
+
+    setEditingReportId(report.id);
+    setReportDate(report.date);
+    setProjectId(report.projectId);
+    setStartTime(extractTimeInputValue(report.startTime));
+    setEndTime(extractTimeInputValue(report.endTime));
+    setMajorTasks(createDraftMediaItemsFromStoredItems(report.majorTaskItems));
+    setBlockers(createDraftMediaItemsFromStoredItems(report.blockerItems));
+    setNextDayPlan(createDraftMediaItemsFromStoredItems(report.nextDayPlanItems));
+    setFeedback(
+      language === "zh"
+        ? `正在编辑日报 #${report.recordNumber}`
+        : `Editing report #${report.recordNumber}`,
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function renderItemList(items: MediaListItem[]) {
@@ -213,7 +337,14 @@ export default function ReportPage() {
         title={copy.report.title}
         description={copy.report.description}
         badges={[
-          { label: copy.report.newRecord, tone: "brand" },
+          {
+            label: editingReportId
+              ? language === "zh"
+                ? "编辑日报"
+                : "Edit report"
+              : copy.report.newRecord,
+            tone: "brand",
+          },
           { label: copy.report.reportFeed, tone: "signal" },
         ]}
       />
@@ -221,9 +352,16 @@ export default function ReportPage() {
       <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
         <Card className="bg-slate-950 text-white">
           <CardHeader>
-            <CardEyebrow className="text-white/50">{copy.report.newRecord}</CardEyebrow>
+            <CardEyebrow className="text-white/50">
+              {editingReportId
+                ? language === "zh"
+                  ? "编辑日报"
+                  : "Edit report"
+                : copy.report.newRecord}
+            </CardEyebrow>
             <CardTitle className="text-white">
-              {projects.find((project) => project.id === projectId)?.name}
+              {projects.find((project) => project.id === projectId)?.name ??
+                (language === "zh" ? "选择项目" : "Choose a project")}
             </CardTitle>
             <CardDescription className="text-white/70">
               {language === "zh"
@@ -232,20 +370,64 @@ export default function ReportPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <label className="block space-y-2">
-              <span className="text-sm font-medium">{copy.attendance.project}</span>
-              <select
-                value={projectId}
-                onChange={(event) => setProjectId(event.target.value)}
-                className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
-              >
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id} className="text-slate-950">
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">{copy.attendance.project}</span>
+                <select
+                  value={projectId}
+                  onChange={(event) => setProjectId(event.target.value)}
+                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                >
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id} className="text-slate-950">
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">
+                  {language === "zh" ? "日报日期" : "Report date"}
+                </span>
+                <input
+                  type="date"
+                  value={reportDate}
+                  onChange={(event) => handleDateChange(event.target.value)}
+                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">{copy.report.startTime}</span>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(event) => setStartTime(event.target.value)}
+                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">{copy.report.endTime}</span>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(event) => setEndTime(event.target.value)}
+                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="rounded-[24px] border border-white/12 bg-white/8 px-4 py-3 text-sm text-white/75">
+              {matchingAttendanceLog?.clockInTime || matchingAttendanceLog?.clockOutTime
+                ? language === "zh"
+                  ? "已从当日考勤带入上下班时间。缺失的时间仍可手动补充，保存后会同步回考勤。"
+                  : "Attendance times for this date were brought in automatically. Fill any missing time manually and saving will sync it back to attendance."
+                : language === "zh"
+                  ? "如果这一天还没有完整打卡，可以直接在这里填写到场和离场时间，保存后会自动写回考勤。"
+                  : "If this day does not have a complete attendance log yet, enter the arrival and departure times here and TideOps will sync them back to attendance."}
+            </div>
 
             <NumberedListComposer
               dark
@@ -271,6 +453,7 @@ export default function ReportPage() {
               capturePhotoLabel={mediaCopy.capturePhotoLabel}
               closeCameraLabel={mediaCopy.closeCameraLabel}
               cameraUnavailableLabel={mediaCopy.cameraUnavailableLabel}
+              existingPhotosLabelTemplate={mediaCopy.existingPhotosLabelTemplate}
             />
 
             <NumberedListComposer
@@ -299,6 +482,7 @@ export default function ReportPage() {
               capturePhotoLabel={mediaCopy.capturePhotoLabel}
               closeCameraLabel={mediaCopy.closeCameraLabel}
               cameraUnavailableLabel={mediaCopy.cameraUnavailableLabel}
+              existingPhotosLabelTemplate={mediaCopy.existingPhotosLabelTemplate}
             />
 
             <NumberedListComposer
@@ -325,6 +509,7 @@ export default function ReportPage() {
               capturePhotoLabel={mediaCopy.capturePhotoLabel}
               closeCameraLabel={mediaCopy.closeCameraLabel}
               cameraUnavailableLabel={mediaCopy.cameraUnavailableLabel}
+              existingPhotosLabelTemplate={mediaCopy.existingPhotosLabelTemplate}
             />
 
             {feedback ? (
@@ -333,13 +518,24 @@ export default function ReportPage() {
               </div>
             ) : null}
 
-            <button
-              type="button"
-              onClick={() => void handleSubmit()}
-              className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950"
-            >
-              {copy.common.submit}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void handleSubmit()}
+                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950"
+              >
+                {editingReportId ? copy.common.save : copy.common.submit}
+              </button>
+              {editingReportId ? (
+                <button
+                  type="button"
+                  onClick={() => resetForm(reportDate)}
+                  className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white"
+                >
+                  {copy.common.cancel}
+                </button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
 
@@ -361,7 +557,7 @@ export default function ReportPage() {
             <div className="space-y-3">
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-slate-700">
-                  {language === "zh" ? "搜索内容 / 项目 / 站点" : "Search content / project / site"}
+                  {language === "zh" ? "搜索编号 / 内容 / 项目 / 站点" : "Search ID / content / project / site"}
                 </span>
                 <input
                   type="search"
@@ -467,6 +663,8 @@ export default function ReportPage() {
                     (site) =>
                       site.id === projects.find((project) => project.id === report.projectId)?.siteId,
                   )?.name ?? "--";
+                const canEdit =
+                  isOperationsManager || report.authorUserId === currentUser?.id;
 
                 return (
                   <div
@@ -475,11 +673,18 @@ export default function ReportPage() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="font-medium text-slate-900">
-                          {projects.find((project) => project.id === report.projectId)?.name}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-slate-900">
+                            {projects.find((project) => project.id === report.projectId)?.name}
+                          </p>
+                          <Badge tone="signal">#{report.recordNumber}</Badge>
+                        </div>
                         <p className="text-sm text-slate-600">
                           {formatDisplayDate(report.date, language)} · {siteName} · {authorName}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {language === "zh" ? "到场 / 离场" : "Arrive / depart"}:{" "}
+                          {report.startTime || "--"} / {report.endTime || "--"}
                         </p>
                       </div>
                       <Badge tone={report.status === "submitted" ? "accent" : "success"}>
@@ -543,17 +748,18 @@ export default function ReportPage() {
                           ))}
                         </ul>
                       </div>
-
-                      {report.attachments.length > 0 ? (
-                        <p className="text-xs font-medium text-slate-500">
-                          {language === "zh"
-                            ? `已附 ${report.attachments.length} 张照片`
-                            : `${report.attachments.length} photo(s) attached`}
-                        </p>
-                      ) : null}
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          onClick={() => startEditing(report.id)}
+                          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                        >
+                          {copy.common.edit}
+                        </button>
+                      ) : null}
                       {isOperationsManager ? (
                         <button
                           type="button"

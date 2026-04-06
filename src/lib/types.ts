@@ -39,6 +39,7 @@ export interface MediaListItem {
 export interface MediaListDraftItem {
   id: string;
   text: string;
+  existingAttachments: string[];
   attachments: File[];
 }
 
@@ -155,6 +156,7 @@ export interface LeaveRequest {
 
 export interface SafetyCheckin {
   id: string;
+  recordNumber: number;
   authorUserId: string;
   projectId: string;
   date: string;
@@ -169,10 +171,12 @@ export interface SafetyCheckin {
   notes: string;
   status: RecordStatus;
   submittedAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface DailyReport {
   id: string;
+  recordNumber: number;
   authorUserId: string;
   projectId: string;
   linkedSafetyCheckinId?: string | null;
@@ -194,10 +198,12 @@ export interface DailyReport {
   closeoutChecks: string[];
   status: RecordStatus;
   submittedAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface IncidentReport {
   id: string;
+  recordNumber: number;
   reporterUserId: string;
   projectId: string;
   occurredAt: string;
@@ -212,6 +218,7 @@ export interface IncidentReport {
   immediateActionItems: MediaListItem[];
   followUpItems: MediaListItem[];
   status: IncidentStatus;
+  createdAt?: string | null;
 }
 
 export interface AuditEntry {

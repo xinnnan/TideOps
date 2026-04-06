@@ -17,7 +17,7 @@ import { generateBriefingSuggestion } from "@/lib/briefing-suggestions";
 import { hazardOptions, ppeOptions, safetyTaskOptions } from "@/lib/form-options";
 import { exportSafetyCheckinPdf } from "@/lib/pdf-export";
 import { formatPeriodLabel, isDateInPeriod, shiftPeriod, type SummaryScope } from "@/lib/periods";
-import { formatDisplayDate } from "@/lib/utils";
+import { formatDisplayDate, getLocalDateString } from "@/lib/utils";
 
 function ToggleChip({
   active,
@@ -54,8 +54,10 @@ export default function SafetyPage() {
     projects,
     safetyCheckins,
     submitSafetyCheckin,
+    updateSafetyCheckin,
   } = useAppState();
   const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const [safetyDate, setSafetyDate] = useState(getLocalDateString());
   const [shift, setShift] = useState("Day");
   const [facilitator, setFacilitator] = useState(currentUser?.fullName ?? "");
   const [taskTypes, setTaskTypes] = useState<string[]>([]);
@@ -63,15 +65,24 @@ export default function SafetyPage() {
   const [ppe, setPpe] = useState<string[]>([]);
   const [briefingTopic, setBriefingTopic] = useState("");
   const [notes, setNotes] = useState("");
+  const [editingSafetyId, setEditingSafetyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [summaryScope, setSummaryScope] = useState<SummaryScope>("week");
   const [summaryAnchor, setSummaryAnchor] = useState(new Date());
+
+  const visibleCheckins = useMemo(
+    () =>
+      isOperationsManager
+        ? safetyCheckins
+        : safetyCheckins.filter((record) => record.authorUserId === currentUser?.id),
+    [currentUser?.id, isOperationsManager, safetyCheckins],
+  );
 
   const suggestedBriefing = useMemo(
     () => generateBriefingSuggestion(taskTypes, hazards, language),
     [hazards, language, taskTypes],
   );
-  const summaryCheckins = safetyCheckins.filter((record) =>
+  const summaryCheckins = visibleCheckins.filter((record) =>
     isDateInPeriod(record.date, summaryAnchor, summaryScope),
   );
   const activeProjects = new Set(summaryCheckins.map((record) => record.projectId)).size;
@@ -92,16 +103,34 @@ export default function SafetyPage() {
         latestDate: latest?.date ?? "",
       };
     })
-    .filter((entry) => entry.total > 0)
+    .filter((entry) =>
+      isOperationsManager
+        ? entry.total > 0
+        : entry.profile.id === currentUser?.id && entry.total > 0,
+    )
     .sort((a, b) => b.total - a.total || a.profile.fullName.localeCompare(b.profile.fullName));
 
   function toggleValue(list: string[], value: string, setter: (items: string[]) => void) {
     setter(list.includes(value) ? list.filter((item) => item !== value) : [...list, value]);
   }
 
+  function resetForm(nextDate = getLocalDateString()) {
+    setEditingSafetyId(null);
+    setSafetyDate(nextDate);
+    setProjectId(projects[0]?.id ?? "");
+    setShift("Day");
+    setFacilitator(currentUser?.fullName ?? "");
+    setTaskTypes([]);
+    setHazards([]);
+    setPpe([]);
+    setBriefingTopic("");
+    setNotes("");
+  }
+
   async function handleSubmit() {
-    const result = await submitSafetyCheckin({
+    const payload = {
       projectId,
+      date: safetyDate,
       shift,
       facilitator,
       taskTypes,
@@ -109,17 +138,52 @@ export default function SafetyPage() {
       ppe,
       briefingTopic,
       notes,
-    });
+    };
+    const result = editingSafetyId
+      ? await updateSafetyCheckin({
+          id: editingSafetyId,
+          ...payload,
+        })
+      : await submitSafetyCheckin(payload);
 
-    setFeedback(result.ok ? copy.safety.submitSuccess : result.error ?? "");
-
-    if (result.ok) {
-      setTaskTypes([]);
-      setHazards([]);
-      setPpe([]);
-      setBriefingTopic("");
-      setNotes("");
+    if (!result.ok) {
+      setFeedback(result.error ?? "");
+      return;
     }
+
+    setFeedback(
+      editingSafetyId
+        ? language === "zh"
+          ? "安全签到已更新。"
+          : "Safety check-in updated."
+        : copy.safety.submitSuccess,
+    );
+    resetForm(safetyDate);
+  }
+
+  function startEditing(checkinId: string) {
+    const record = safetyCheckins.find((item) => item.id === checkinId);
+
+    if (!record) {
+      return;
+    }
+
+    setEditingSafetyId(record.id);
+    setProjectId(record.projectId);
+    setSafetyDate(record.date);
+    setShift(record.shift);
+    setFacilitator(record.facilitator);
+    setTaskTypes(record.taskTypes);
+    setHazards(record.hazardFlags);
+    setPpe(record.ppeFlags);
+    setBriefingTopic(record.briefingTopic);
+    setNotes(record.notes);
+    setFeedback(
+      language === "zh"
+        ? `正在编辑安全签到 #${record.recordNumber}`
+        : `Editing safety check-in #${record.recordNumber}`,
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleDeleteSafetyCheckin(safetyCheckinId: string) {
@@ -171,7 +235,14 @@ export default function SafetyPage() {
         title={copy.safety.title}
         description={copy.safety.description}
         badges={[
-          { label: copy.safety.newRecord, tone: "brand" },
+          {
+            label: editingSafetyId
+              ? language === "zh"
+                ? "编辑签到"
+                : "Edit check-in"
+              : copy.safety.newRecord,
+            tone: "brand",
+          },
           { label: copy.safety.recentRecords, tone: "signal" },
         ]}
       />
@@ -179,17 +250,24 @@ export default function SafetyPage() {
       <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="bg-slate-950 text-white">
           <CardHeader>
-            <CardEyebrow className="text-white/50">{copy.safety.newRecord}</CardEyebrow>
+            <CardEyebrow className="text-white/50">
+              {editingSafetyId
+                ? language === "zh"
+                  ? "编辑签到"
+                  : "Edit check-in"
+                : copy.safety.newRecord}
+            </CardEyebrow>
             <CardTitle className="text-white">
-              {projects.find((project) => project.id === projectId)?.name}
+              {projects.find((project) => project.id === projectId)?.name ??
+                (language === "zh" ? "选择项目" : "Choose a project")}
             </CardTitle>
             <CardDescription className="text-white/70">
               {copy.safety.description}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-2">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">{copy.attendance.project}</span>
                 <select
                   value={projectId}
@@ -204,6 +282,20 @@ export default function SafetyPage() {
                 </select>
               </label>
               <label className="block space-y-2">
+                <span className="text-sm font-medium">
+                  {language === "zh" ? "签到日期" : "Check-in date"}
+                </span>
+                <input
+                  type="date"
+                  value={safetyDate}
+                  onChange={(event) => setSafetyDate(event.target.value)}
+                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2">
                 <span className="text-sm font-medium">{copy.safety.shift}</span>
                 <select
                   value={shift}
@@ -214,15 +306,15 @@ export default function SafetyPage() {
                   <option className="text-slate-950">Night</option>
                 </select>
               </label>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">{copy.safety.facilitator}</span>
+                <input
+                  value={facilitator}
+                  onChange={(event) => setFacilitator(event.target.value)}
+                  className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                />
+              </label>
             </div>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium">{copy.safety.facilitator}</span>
-              <input
-                value={facilitator}
-                onChange={(event) => setFacilitator(event.target.value)}
-                className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
-              />
-            </label>
 
             <div className="space-y-3">
               <p className="text-sm font-medium">{copy.safety.taskTypes}</p>
@@ -310,13 +402,24 @@ export default function SafetyPage() {
                 {feedback}
               </div>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void handleSubmit()}
-              className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950"
-            >
-              {copy.common.submit}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void handleSubmit()}
+                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950"
+              >
+                {editingSafetyId ? copy.common.save : copy.common.submit}
+              </button>
+              {editingSafetyId ? (
+                <button
+                  type="button"
+                  onClick={() => resetForm(safetyDate)}
+                  className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white"
+                >
+                  {copy.common.cancel}
+                </button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
 
@@ -324,24 +427,35 @@ export default function SafetyPage() {
           <CardHeader>
             <CardEyebrow>{copy.safety.recentRecords}</CardEyebrow>
             <CardTitle>{copy.safety.recentRecords}</CardTitle>
-            <CardDescription>{copy.safety.description}</CardDescription>
+            <CardDescription>
+              {isOperationsManager
+                ? language === "zh"
+                  ? "运营经理可以查看并编辑全部安全签到记录。"
+                  : "Operations managers can review and edit all safety check-ins."
+                : language === "zh"
+                  ? "这里只显示你自己的安全签到记录。"
+                  : "Only your own safety check-ins are shown here."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {safetyCheckins.length === 0 ? (
+            {visibleCheckins.length === 0 ? (
               <div className="rounded-[24px] border border-slate-200 bg-white p-4 text-sm text-slate-600">
                 {copy.common.noData}
               </div>
             ) : (
-              safetyCheckins.slice(0, 6).map((record) => (
+              visibleCheckins.slice(0, 8).map((record) => (
                 <div
                   key={record.id}
                   className="rounded-[24px] border border-slate-200 bg-white p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-medium text-slate-900">
-                        {projects.find((project) => project.id === record.projectId)?.name}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-slate-900">
+                          {projects.find((project) => project.id === record.projectId)?.name}
+                        </p>
+                        <Badge tone="signal">#{record.recordNumber}</Badge>
+                      </div>
                       <p className="text-sm text-slate-600">
                         {formatDisplayDate(record.date, language)} · {record.facilitator}
                       </p>
@@ -350,6 +464,13 @@ export default function SafetyPage() {
                       <Badge tone={record.status === "submitted" ? "accent" : "success"}>
                         {record.status}
                       </Badge>
+                      <button
+                        type="button"
+                        onClick={() => startEditing(record.id)}
+                        className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                      >
+                        {copy.common.edit}
+                      </button>
                       <button
                         type="button"
                         onClick={() => void handleExportSafetyCheckin(record.id)}

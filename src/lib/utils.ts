@@ -21,6 +21,23 @@ export function getLocalTimeString(date = new Date()) {
   return `${hours}:${minutes}`;
 }
 
+export function combineLocalDateAndTime(date: string, time: string) {
+  return new Date(`${date}T${time}:00`).toISOString();
+}
+
+export function extractTimeInputValue(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  if (value.includes("T")) {
+    const date = new Date(value);
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+
+  return value.slice(0, 5);
+}
+
 export function formatDisplayDate(value: string, language: Language) {
   const date = new Date(`${value}T00:00:00`);
 

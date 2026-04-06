@@ -17,7 +17,11 @@ import {
 } from "@/components/ui/card";
 import { TabBar } from "@/components/ui/tab-bar";
 import { formatPeriodLabel, isDateInPeriod, shiftPeriod, type SummaryScope } from "@/lib/periods";
-import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
+import {
+  extractTimeInputValue,
+  formatDisplayDate,
+  formatDisplayTime,
+} from "@/lib/utils";
 
 type AttendanceView = "session" | "leave" | "summary";
 
@@ -76,6 +80,7 @@ export default function AttendancePage() {
     projectAssignments,
     reviewLeave,
     submitLeave,
+    updateAttendanceLog,
   } = useAppState();
   const [projectId, setProjectId] = useState(
     projectAssignments.find((item) => item.userId === currentUser?.id && item.active)
@@ -92,6 +97,15 @@ export default function AttendancePage() {
   const [partialDay, setPartialDay] = useState(false);
   const [reason, setReason] = useState("");
   const [managerComments, setManagerComments] = useState<Record<string, string>>({});
+  const [editingAttendanceId, setEditingAttendanceId] = useState<string | null>(null);
+  const [editingAttendanceUserId, setEditingAttendanceUserId] = useState<string | null>(null);
+  const [editingAttendanceDate, setEditingAttendanceDate] = useState("");
+  const [editingAttendanceProjectId, setEditingAttendanceProjectId] = useState("");
+  const [editingClockInTime, setEditingClockInTime] = useState("");
+  const [editingClockOutTime, setEditingClockOutTime] = useState("");
+  const [editingClockInLocation, setEditingClockInLocation] = useState("");
+  const [editingClockOutLocation, setEditingClockOutLocation] = useState("");
+  const [editingAttendanceNote, setEditingAttendanceNote] = useState("");
 
   const viewOptions = isOperationsManager
     ? [
@@ -181,7 +195,13 @@ export default function AttendancePage() {
 
   async function handleClockIn() {
     const result = await clockIn({ projectId, note, location });
-    setFeedback(result.ok ? copy.attendance.clockedIn : result.error ?? "");
+    setFeedback(
+      result.ok
+        ? language === "zh"
+          ? "已上班打卡。记得离场前完成下班打卡。"
+          : "Clocked in. Remember to clock out before you leave."
+        : result.error ?? "",
+    );
     if (result.ok) {
       setNote("");
     }
@@ -243,6 +263,71 @@ export default function AttendancePage() {
           : "Attendance record deleted."
         : result.error ?? "",
     );
+  }
+
+  function resetAttendanceEdit() {
+    setEditingAttendanceId(null);
+    setEditingAttendanceUserId(null);
+    setEditingAttendanceDate("");
+    setEditingAttendanceProjectId("");
+    setEditingClockInTime("");
+    setEditingClockOutTime("");
+    setEditingClockInLocation("");
+    setEditingClockOutLocation("");
+    setEditingAttendanceNote("");
+  }
+
+  function startEditingAttendance(logId: string) {
+    const log = attendanceLogs.find((item) => item.id === logId);
+
+    if (!log) {
+      return;
+    }
+
+    setEditingAttendanceId(log.id);
+    setEditingAttendanceUserId(log.userId);
+    setEditingAttendanceDate(log.date);
+    setEditingAttendanceProjectId(log.projectId ?? projects[0]?.id ?? "");
+    setEditingClockInTime(extractTimeInputValue(log.clockInTime));
+    setEditingClockOutTime(extractTimeInputValue(log.clockOutTime));
+    setEditingClockInLocation(log.clockInLocation ?? "");
+    setEditingClockOutLocation(log.clockOutLocation ?? "");
+    setEditingAttendanceNote(log.note ?? "");
+    setFeedback(
+      language === "zh"
+        ? "正在编辑考勤记录。"
+        : "Editing attendance record.",
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleAttendanceEditSave() {
+    if (!editingAttendanceId) {
+      return;
+    }
+
+    const result = await updateAttendanceLog({
+      id: editingAttendanceId,
+      projectId: editingAttendanceProjectId,
+      date: editingAttendanceDate,
+      clockInTime: editingClockInTime,
+      clockOutTime: editingClockOutTime,
+      clockInLocation: editingClockInLocation,
+      clockOutLocation: editingClockOutLocation,
+      note: editingAttendanceNote,
+    });
+
+    if (!result.ok) {
+      setFeedback(result.error ?? "");
+      return;
+    }
+
+    setFeedback(
+      language === "zh"
+        ? "考勤记录已更新。"
+        : "Attendance record updated.",
+    );
+    resetAttendanceEdit();
   }
 
   return (
@@ -469,6 +554,134 @@ export default function AttendancePage() {
             ) : null}
           </section>
 
+          {editingAttendanceId ? (
+            <Card>
+              <CardHeader>
+                <CardEyebrow>
+                  {language === "zh" ? "编辑考勤记录" : "Edit attendance"}
+                </CardEyebrow>
+                <CardTitle>
+                  {language === "zh" ? "编辑考勤记录" : "Edit attendance"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "zh"
+                    ? `修改时间、位置或备注。${editingAttendanceUserId !== currentUser?.id ? "当前正在代他人修正记录。" : ""}`
+                    : `Adjust time, location, or note.${editingAttendanceUserId !== currentUser?.id ? " You are editing another user's record." : ""}`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <label className="block space-y-2 xl:col-span-2">
+                    <span className="text-sm font-medium text-slate-700">
+                      {copy.attendance.project}
+                    </span>
+                    <select
+                      value={editingAttendanceProjectId}
+                      onChange={(event) => setEditingAttendanceProjectId(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none"
+                    >
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">
+                      {language === "zh" ? "日期" : "Date"}
+                    </span>
+                    <input
+                      type="date"
+                      value={editingAttendanceDate}
+                      onChange={(event) => setEditingAttendanceDate(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">
+                      {copy.common.status}
+                    </span>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      {language === "zh"
+                        ? "保存后会根据上下班时间自动刷新状态。"
+                        : "Status will refresh automatically after save based on the times below."}
+                    </div>
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">
+                      {language === "zh" ? "上班时间" : "Clock-in time"}
+                    </span>
+                    <input
+                      type="time"
+                      value={editingClockInTime}
+                      onChange={(event) => setEditingClockInTime(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">
+                      {language === "zh" ? "下班时间" : "Clock-out time"}
+                    </span>
+                    <input
+                      type="time"
+                      value={editingClockOutTime}
+                      onChange={(event) => setEditingClockOutTime(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">
+                      {language === "zh" ? "上班位置" : "Clock-in location"}
+                    </span>
+                    <input
+                      value={editingClockInLocation}
+                      onChange={(event) => setEditingClockInLocation(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">
+                      {language === "zh" ? "下班位置" : "Clock-out location"}
+                    </span>
+                    <input
+                      value={editingClockOutLocation}
+                      onChange={(event) => setEditingClockOutLocation(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none"
+                    />
+                  </label>
+                </div>
+
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-slate-700">{copy.attendance.note}</span>
+                  <textarea
+                    rows={3}
+                    value={editingAttendanceNote}
+                    onChange={(event) => setEditingAttendanceNote(event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none"
+                  />
+                </label>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleAttendanceEditSave()}
+                    className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white"
+                  >
+                    {copy.common.save}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetAttendanceEdit}
+                    className="rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700"
+                  >
+                    {copy.common.cancel}
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardEyebrow>{copy.attendance.myHistory}</CardEyebrow>
@@ -484,12 +697,15 @@ export default function AttendancePage() {
                       <th className="px-4 py-3 font-medium">In</th>
                       <th className="px-4 py-3 font-medium">Out</th>
                       <th className="px-4 py-3 font-medium">{copy.common.status}</th>
+                      <th className="px-4 py-3 font-medium">
+                        {language === "zh" ? "操作" : "Actions"}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {myLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                        <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
                           {copy.common.noData}
                         </td>
                       </tr>
@@ -522,6 +738,15 @@ export default function AttendancePage() {
                             >
                               {getAttendanceLabel(log.attendanceStatus, language)}
                             </Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => startEditingAttendance(log.id)}
+                              className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                            >
+                              {copy.common.edit}
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -588,6 +813,13 @@ export default function AttendancePage() {
                           >
                             {getAttendanceLabel(log.attendanceStatus, language)}
                           </Badge>
+                          <button
+                            type="button"
+                            onClick={() => startEditingAttendance(log.id)}
+                            className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                          >
+                            {copy.common.edit}
+                          </button>
                           <button
                             type="button"
                             onClick={() => void handleDeleteAttendanceLog(log.id)}

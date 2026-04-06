@@ -732,6 +732,7 @@ export async function exportDailyReportPdf({
       "围绕现场完成工作、当前阻碍、次日计划和相关照片生成的正式日报。",
     ),
     metaBlocks: [
+      { label: getLabel(language, "Record #", "编号"), value: `#${report.recordNumber}` },
       { label: getLabel(language, "Project", "项目"), value: projectName },
       { label: getLabel(language, "Author", "提交人"), value: authorName },
       {
@@ -739,6 +740,10 @@ export async function exportDailyReportPdf({
         value: formatDisplayDate(report.date, language),
       },
       { label: getLabel(language, "Shift", "班次"), value: report.shift || "--" },
+      {
+        label: getLabel(language, "Arrive / depart", "到场 / 离场"),
+        value: `${report.startTime || "--"} / ${report.endTime || "--"}`,
+      },
     ],
     listSections: [
       {
@@ -769,7 +774,7 @@ export async function exportDailyReportPdf({
         items: nextDayPlan,
       },
     ],
-    filename: `${getSafeFileStem(projectName)}-daily-report-${report.date}.pdf`,
+    filename: `${getSafeFileStem(projectName)}-daily-report-${report.recordNumber}.pdf`,
     theme: REPORT_THEME,
   });
 }
@@ -800,6 +805,7 @@ export async function exportIncidentPdf({
       "围绕事实、即时动作、后续跟进和现场照片生成的结构化异常记录。",
     ),
     metaBlocks: [
+      { label: getLabel(language, "Record #", "编号"), value: `#${incident.recordNumber}` },
       { label: getLabel(language, "Project", "项目"), value: projectName },
       { label: getLabel(language, "Reporter", "上报人"), value: reporterName },
       {
@@ -845,7 +851,7 @@ export async function exportIncidentPdf({
         items: followUps,
       },
     ],
-    filename: `${getSafeFileStem(projectName)}-incident-${incident.id.slice(0, 8)}.pdf`,
+    filename: `${getSafeFileStem(projectName)}-incident-${incident.recordNumber}.pdf`,
     theme: INCIDENT_THEME,
   });
 }
@@ -872,6 +878,7 @@ export async function exportSafetyCheckinPdf({
       "围绕作业内容、风险、PPE 检查、briefing topic 和现场备注生成的结构化安全签到记录。",
     ),
     metaBlocks: [
+      { label: getLabel(language, "Record #", "编号"), value: `#${checkin.recordNumber}` },
       { label: getLabel(language, "Project", "项目"), value: projectName },
       { label: getLabel(language, "Submitted by", "提交人"), value: authorName },
       {
@@ -935,7 +942,7 @@ export async function exportSafetyCheckinPdf({
         items: stringArrayToItems([checkin.notes]),
       },
     ],
-    filename: `${getSafeFileStem(projectName)}-safety-checkin-${checkin.date}.pdf`,
+    filename: `${getSafeFileStem(projectName)}-safety-checkin-${checkin.recordNumber}.pdf`,
     theme: SAFETY_THEME,
   });
 }

@@ -250,6 +250,7 @@ export function mapSafetyCheckin(
 ): SafetyCheckin {
   return {
     id: String(row.id),
+    recordNumber: Number(row.record_number ?? 0),
     authorUserId: String(row.author_user_id),
     projectId: String(row.project_id),
     date: String(row.date ?? ""),
@@ -265,6 +266,7 @@ export function mapSafetyCheckin(
     notes: String(row.notes ?? ""),
     status: (row.status as SafetyCheckin["status"]) ?? "draft",
     submittedAt: (row.submitted_at as string | null | undefined) ?? null,
+    createdAt: (row.created_at as string | null | undefined) ?? null,
   };
 }
 
@@ -286,6 +288,7 @@ export function mapDailyReport(row: Record<string, unknown>): DailyReport {
 
   return {
     id: String(row.id),
+    recordNumber: Number(row.record_number ?? 0),
     authorUserId: String(row.author_user_id),
     projectId: String(row.project_id),
     linkedSafetyCheckinId:
@@ -309,6 +312,7 @@ export function mapDailyReport(row: Record<string, unknown>): DailyReport {
     closeoutChecks: [],
     status: (row.status as DailyReport["status"]) ?? "draft",
     submittedAt: (row.submitted_at as string | null | undefined) ?? null,
+    createdAt: (row.created_at as string | null | undefined) ?? null,
   };
 }
 
@@ -330,6 +334,7 @@ export function mapIncident(row: Record<string, unknown>): IncidentReport {
 
   return {
     id: String(row.id),
+    recordNumber: Number(row.record_number ?? 0),
     reporterUserId: String(row.reporter_user_id),
     projectId: String(row.project_id),
     occurredAt: String(row.occurred_at ?? ""),
@@ -344,6 +349,7 @@ export function mapIncident(row: Record<string, unknown>): IncidentReport {
     immediateActionItems,
     followUpItems,
     status: (row.status as IncidentReport["status"]) ?? "open",
+    createdAt: (row.created_at as string | null | undefined) ?? null,
   };
 }
 
