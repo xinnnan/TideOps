@@ -132,6 +132,8 @@ After finishing any meaningful task:
 - Leave type is currently fixed to `unpaid` in the UI. Do not expose a leave-type dropdown again until PTO or other leave categories become a real configurable feature.
 - Updated on `2026-04-06`: report and incident PDF export now works best through a browser-rendered capture path (`html2canvas` -> paged `jsPDF`) instead of raw `jsPDF` text drawing. This avoids Chinese font breakage and preserves attached images and layout styling in the final PDF.
 - Updated on `2026-04-06`: safety check-in PDF export now uses that same browser-rendered bilingual export path, so safety, report, and incident exports all follow one consistent Chinese-safe rendering approach.
+- Updated on `2026-04-06`: exported PDFs paginate more cleanly when rendered block-by-block instead of as one long page canvas. Keep section titles attached to their first content block so headings do not get stranded at the bottom of a page.
+- Updated on `2026-04-06`: daily reports now carry a `field_crew_json` list. This is a flat string array that can mix platform users and manually entered external names, and it should appear both in the in-app report feed and in exported PDFs.
 - Verified on `2026-04-06`: deleting a safety check-in can fail if a daily report still points at it through `daily_reports.safety_checkin_id`. The safe delete flow is to null out those references first, then remove the safety record.
 - For daily reports and incidents, keep numbered-list entry strictly item-by-item. Do not reintroduce multi-line paste that automatically splits text into multiple numbered items.
 - In report and incident numbered-list entry, keep the add action inside the list input area, near the current items. Do not move the add button back up into the section header row.
@@ -160,24 +162,23 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Add editable submitted field records and attendance/report linkage. Safety check-ins, daily reports, and incidents now support edit for the original author and operations managers. Attendance now reminds users to clock out after clock-in, allows self-edit and manager-edit, and stays manager-delete-only. Safety, daily report, and incident records also use stable incrementing numbers so multiple same-day submissions are possible, and daily reports now carry arrival/departure times that can sync into attendance automatically.
+- Expand daily reports and polish exported PDFs. Daily reports need a "today's field crew" list that can mix selected users and manually entered engineer names, and that list must appear in the exported PDF. Safety, daily report, and incident PDFs also need a cleaner client-facing design: better pagination, pure white background, no TideOps/product tags, and more neutral service-oriented wording instead of usage guidance.
 
 Checklist:
 
-- [x] Re-read project continuity notes and inspect the current provider, pages, and schema
-- [x] Add record-number fields and same-day multi-entry support to the schema and mapping layer
-- [x] Finish provider update flows for attendance, safety, daily report, and incident editing
-- [x] Add attendance reminder and edit UI on the attendance page
-- [x] Add edit flows and record numbers on safety, report, and incident pages
-- [x] Add daily report attendance-time inputs with attendance auto-fill and sync-back
+- [x] Re-read project continuity notes and inspect the report and PDF implementation
+- [x] Add daily report field-crew storage to schema, types, mapping, and provider flows
+- [x] Add field-crew selection + manual names to the daily report form and feed
+- [x] Rework PDF export layout for cleaner block pagination and white-background output
+- [x] Remove product tags from PDF headers and rewrite PDF copy to be client-facing and neutral
 - [x] Run lint/build and update continuity notes with any new durable rules
 
 Most likely next tasks:
 
-- [ ] Apply `supabase/migrations/20260406231500_add_record_numbers_and_multientry_support.sql` in Supabase before testing multiple same-day safety/report/incident entries in a deployed environment
-- [ ] If record numbers need a different visible prefix later, add it at the presentation layer without changing the numeric sequence source of truth
-- [ ] If users need to remove already-uploaded report or incident photos during edit, add explicit stored-attachment removal instead of dropping paths implicitly
-- [ ] If attendance later needs project-level or user-level search for managers, keep the edit workflow in a dedicated editor panel instead of putting full edit controls inside every summary card
+- [ ] After this feature lands, run the new daily-report attendee migration in Supabase before testing in Vercel
+- [ ] If field crew later needs richer structure such as lead/technician roles, store that in a separate JSON object instead of overloading a flat string list
+- [ ] If exported PDFs later need logos or client branding, add that as an optional document theme layer without reintroducing app-product badges in the header
+- [ ] If PDF output grows again, keep pagination block-based instead of falling back to one giant canvas slice
 
 Scratchpad rules:
 

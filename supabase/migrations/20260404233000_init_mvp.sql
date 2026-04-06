@@ -234,6 +234,7 @@ create table public.daily_reports (
   issue_status public.issue_status not null default 'pending',
   next_day_plan text,
   blockers text,
+  field_crew_json jsonb not null default '[]'::jsonb,
   status public.record_status not null default 'draft',
   submitted_at timestamptz,
   created_at timestamptz not null default now(),

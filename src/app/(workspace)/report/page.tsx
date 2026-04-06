@@ -42,6 +42,10 @@ function getReportDefaults(params: {
   };
 }
 
+function dedupeNames(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
 export default function ReportPage() {
   const {
     attendanceLogs,
@@ -71,6 +75,9 @@ export default function ReportPage() {
   const [majorTasks, setMajorTasks] = useState([createDraftMediaListItem()]);
   const [blockers, setBlockers] = useState([createDraftMediaListItem()]);
   const [nextDayPlan, setNextDayPlan] = useState([createDraftMediaListItem()]);
+  const [fieldCrew, setFieldCrew] = useState<string[]>([]);
+  const [selectedCrewUserId, setSelectedCrewUserId] = useState("");
+  const [manualCrewName, setManualCrewName] = useState("");
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [feedSearch, setFeedSearch] = useState("");
@@ -131,6 +138,7 @@ export default function ReportPage() {
         report.majorTasks,
         report.blockers,
         report.nextDayPlan,
+        ...report.fieldCrew,
         ...report.majorTaskItems.map((item) => item.text),
         ...report.blockerItems.map((item) => item.text),
         ...report.nextDayPlanItems.map((item) => item.text),
@@ -192,6 +200,14 @@ export default function ReportPage() {
       .sort((left, right) => left.fullName.localeCompare(right.fullName));
   }, [dailyReports, profiles]);
 
+  const availableCrewProfiles = useMemo(
+    () =>
+      profiles
+        .filter((profile) => profile.status !== "inactive")
+        .sort((left, right) => left.fullName.localeCompare(right.fullName)),
+    [profiles],
+  );
+
   function resetForm(nextDate = getLocalDateString()) {
     const defaults = getReportDefaults({
       attendanceLogs,
@@ -208,6 +224,9 @@ export default function ReportPage() {
     setMajorTasks([createDraftMediaListItem()]);
     setBlockers([createDraftMediaListItem()]);
     setNextDayPlan([createDraftMediaListItem()]);
+    setFieldCrew([]);
+    setSelectedCrewUserId("");
+    setManualCrewName("");
   }
 
   function handleDateChange(nextDate: string) {
@@ -235,6 +254,7 @@ export default function ReportPage() {
       date: reportDate,
       startTime,
       endTime,
+      fieldCrew,
       majorTasks,
       blockers,
       nextDayPlan,
@@ -273,6 +293,9 @@ export default function ReportPage() {
     setProjectId(report.projectId);
     setStartTime(extractTimeInputValue(report.startTime));
     setEndTime(extractTimeInputValue(report.endTime));
+    setFieldCrew(report.fieldCrew);
+    setSelectedCrewUserId("");
+    setManualCrewName("");
     setMajorTasks(createDraftMediaItemsFromStoredItems(report.majorTaskItems));
     setBlockers(createDraftMediaItemsFromStoredItems(report.blockerItems));
     setNextDayPlan(createDraftMediaItemsFromStoredItems(report.nextDayPlanItems));
@@ -286,6 +309,36 @@ export default function ReportPage() {
 
   function renderItemList(items: MediaListItem[]) {
     return items.filter((item) => item.text.trim().length > 0 || item.attachments.length > 0);
+  }
+
+  function addCrewName(name: string) {
+    const normalized = name.trim();
+
+    if (!normalized) {
+      return;
+    }
+
+    setFieldCrew((current) => dedupeNames([...current, normalized]));
+  }
+
+  function addSelectedCrewUser() {
+    const profile = profiles.find((item) => item.id === selectedCrewUserId);
+
+    if (!profile) {
+      return;
+    }
+
+    addCrewName(profile.fullName);
+    setSelectedCrewUserId("");
+  }
+
+  function addManualCrewName() {
+    addCrewName(manualCrewName);
+    setManualCrewName("");
+  }
+
+  function removeCrewName(name: string) {
+    setFieldCrew((current) => current.filter((item) => item !== name));
   }
 
   async function handleExport(reportId: string) {
@@ -427,6 +480,94 @@ export default function ReportPage() {
                 : language === "zh"
                   ? "如果这一天还没有完整打卡，可以直接在这里填写到场和离场时间，保存后会自动写回考勤。"
                   : "If this day does not have a complete attendance log yet, enter the arrival and departure times here and TideOps will sync them back to attendance."}
+            </div>
+
+            <div className="rounded-[24px] border border-white/12 bg-white/8 p-4">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-white">
+                    {language === "zh" ? "今日出勤人员" : "Today's field crew"}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-white/70">
+                    {language === "zh"
+                      ? "可以从平台用户里选择，也可以手动补充临时或外部工程师名字。"
+                      : "Select names from platform users, or add temporary and external engineers manually."}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <select
+                    value={selectedCrewUserId}
+                    onChange={(event) => setSelectedCrewUserId(event.target.value)}
+                    className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none"
+                  >
+                    <option value="" className="text-slate-950">
+                      {language === "zh" ? "从用户中添加" : "Add from users"}
+                    </option>
+                    {availableCrewProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id} className="text-slate-950">
+                        {profile.fullName}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={addSelectedCrewUser}
+                    className="rounded-full border border-white/15 px-4 py-3 text-sm font-semibold text-white"
+                  >
+                    {language === "zh" ? "添加用户" : "Add user"}
+                  </button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <input
+                    value={manualCrewName}
+                    onChange={(event) => setManualCrewName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      addManualCrewName();
+                    }}
+                    placeholder={
+                      language === "zh"
+                        ? "手动输入工程师姓名"
+                        : "Add an engineer name manually"
+                    }
+                    className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm text-white outline-none placeholder:text-white/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={addManualCrewName}
+                    className="rounded-full border border-white/15 px-4 py-3 text-sm font-semibold text-white"
+                  >
+                    {language === "zh" ? "添加姓名" : "Add name"}
+                  </button>
+                </div>
+
+                {fieldCrew.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {fieldCrew.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => removeCrewName(name)}
+                        className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-950"
+                      >
+                        {name} ×
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/12 px-4 py-3 text-sm text-white/55">
+                    {language === "zh"
+                      ? "还没有添加今日出勤人员。"
+                      : "No field crew names added yet."}
+                  </div>
+                )}
+              </div>
             </div>
 
             <NumberedListComposer
@@ -686,6 +827,12 @@ export default function ReportPage() {
                           {language === "zh" ? "到场 / 离场" : "Arrive / depart"}:{" "}
                           {report.startTime || "--"} / {report.endTime || "--"}
                         </p>
+                        {report.fieldCrew.length > 0 ? (
+                          <p className="mt-1 text-xs text-slate-500">
+                            {language === "zh" ? "今日出勤人员" : "Field crew"}:{" "}
+                            {report.fieldCrew.join(language === "zh" ? "、" : ", ")}
+                          </p>
+                        ) : null}
                       </div>
                       <Badge tone={report.status === "submitted" ? "accent" : "success"}>
                         {report.status}

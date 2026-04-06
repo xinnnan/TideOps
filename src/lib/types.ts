@@ -191,6 +191,7 @@ export interface DailyReport {
   issueStatus: "resolved" | "monitoring" | "pending" | "escalated";
   nextDayPlan: string;
   blockers: string;
+  fieldCrew: string[];
   attachments: string[];
   majorTaskItems: MediaListItem[];
   blockerItems: MediaListItem[];

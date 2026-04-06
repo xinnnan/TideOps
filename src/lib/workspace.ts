@@ -305,6 +305,7 @@ export function mapDailyReport(row: Record<string, unknown>): DailyReport {
       (row.issue_status as DailyReport["issueStatus"]) ?? "pending",
     nextDayPlan: String(row.next_day_plan ?? ""),
     blockers: String(row.blockers ?? ""),
+    fieldCrew: parseStringArray(row.field_crew_json),
     attachments,
     majorTaskItems,
     blockerItems,

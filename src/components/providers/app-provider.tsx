@@ -218,6 +218,7 @@ interface AppContextValue extends WorkspaceData {
     date: string;
     startTime: string;
     endTime: string;
+    fieldCrew: string[];
     majorTasks: MediaListDraftItem[];
     blockers: MediaListDraftItem[];
     nextDayPlan: MediaListDraftItem[];
@@ -228,6 +229,7 @@ interface AppContextValue extends WorkspaceData {
     date: string;
     startTime: string;
     endTime: string;
+    fieldCrew: string[];
     majorTasks: MediaListDraftItem[];
     blockers: MediaListDraftItem[];
     nextDayPlan: MediaListDraftItem[];
@@ -1893,6 +1895,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     date: string;
     startTime: string;
     endTime: string;
+    fieldCrew: string[];
     majorTasks: MediaListDraftItem[];
     blockers: MediaListDraftItem[];
     nextDayPlan: MediaListDraftItem[];
@@ -1986,6 +1989,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         issue_status: blockerItems.length > 0 ? "monitoring" : "resolved",
         next_day_plan: nextDayPlanItems.map((item) => item.text).join("\n"),
         blockers: blockerItems.map((item) => item.text).join("\n") || null,
+        field_crew_json: Array.from(
+          new Set(payload.fieldCrew.map((item) => item.trim()).filter(Boolean)),
+        ),
         major_tasks_items_json: majorTaskItems,
         blocker_items_json: blockerItems,
         next_day_plan_items_json: nextDayPlanItems,
@@ -2024,6 +2030,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     date: string;
     startTime: string;
     endTime: string;
+    fieldCrew: string[];
     majorTasks: MediaListDraftItem[];
     blockers: MediaListDraftItem[];
     nextDayPlan: MediaListDraftItem[];
@@ -2107,6 +2114,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         issue_status: blockerItems.length > 0 ? "monitoring" : "resolved",
         next_day_plan: nextDayPlanItems.map((item) => item.text).join("\n"),
         blockers: blockerItems.map((item) => item.text).join("\n") || null,
+        field_crew_json: Array.from(
+          new Set(payload.fieldCrew.map((item) => item.trim()).filter(Boolean)),
+        ),
         major_tasks_items_json: majorTaskItems,
         blocker_items_json: blockerItems,
         next_day_plan_items_json: nextDayPlanItems,

@@ -8,42 +8,41 @@ import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/utils";
 
 type ExportLanguage = "en" | "zh";
-type PdfKind = "daily-report" | "incident" | "safety-checkin";
 type PdfTheme = {
   accent: string;
   accentSoft: string;
   accentText: string;
-  headerBg: string;
-  headerText: string;
 };
 type ExportListItem = {
   text: string;
   attachments: string[];
 };
+type ExportSection = {
+  title: string;
+  description: string;
+  items: ExportListItem[];
+  layout?: "cards" | "compact";
+};
 
 const FIELD_MEDIA_BUCKET = "field-media";
 const CANVAS_WIDTH = 1100;
 const PDF_MARGIN_MM = 10;
+const PDF_FOOTER_SPACE_MM = 8;
+const PDF_BLOCK_GAP_MM = 4;
 const REPORT_THEME: PdfTheme = {
   accent: "#0f766e",
   accentSoft: "#ccfbf1",
   accentText: "#115e59",
-  headerBg: "#052e2b",
-  headerText: "#f0fdfa",
 };
 const INCIDENT_THEME: PdfTheme = {
   accent: "#b45309",
   accentSoft: "#fef3c7",
   accentText: "#92400e",
-  headerBg: "#3b1d00",
-  headerText: "#fffbeb",
 };
 const SAFETY_THEME: PdfTheme = {
   accent: "#2563eb",
   accentSoft: "#dbeafe",
   accentText: "#1d4ed8",
-  headerBg: "#0f172a",
-  headerText: "#eff6ff",
 };
 
 function getLabel(language: ExportLanguage, en: string, zh: string) {
@@ -55,18 +54,7 @@ function getSafeFileStem(value: string) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "tideops";
-}
-
-function getDocumentKindLabel(kind: PdfKind, language: ExportLanguage) {
-  switch (kind) {
-    case "daily-report":
-      return getLabel(language, "Daily report", "日报");
-    case "incident":
-      return getLabel(language, "Incident", "异常");
-    case "safety-checkin":
-      return getLabel(language, "Safety", "安全签到");
-  }
+    .replace(/^-+|-+$/g, "") || "service-record";
 }
 
 function applyStyles(
@@ -94,25 +82,6 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
-function createChip(label: string, theme: PdfTheme) {
-  return createElement(
-    "span",
-    {
-      display: "inline-flex",
-      alignItems: "center",
-      borderRadius: "999px",
-      padding: "8px 14px",
-      background: theme.accentSoft,
-      color: theme.accentText,
-      fontSize: "14px",
-      fontWeight: "700",
-      letterSpacing: "0.02em",
-      whiteSpace: "nowrap",
-    },
-    label,
-  );
-}
-
 function createMetaBlock(label: string, value: string) {
   const wrapper = createElement("div", {
     display: "grid",
@@ -123,23 +92,22 @@ function createMetaBlock(label: string, value: string) {
     createElement(
       "div",
       {
-        fontSize: "13px",
+        fontSize: "12px",
         fontWeight: "700",
         color: "#475569",
-        textTransform: "uppercase",
-        letterSpacing: "0.05em",
+        letterSpacing: "0.02em",
       },
       label,
     ),
     createElement(
       "div",
       {
-        padding: "16px 18px",
-        borderRadius: "20px",
+        padding: "15px 18px",
+        borderRadius: "18px",
         border: "1px solid #dbe3ef",
         background: "#ffffff",
         color: "#0f172a",
-        fontSize: "18px",
+        fontSize: "17px",
         lineHeight: "1.5",
         wordBreak: "break-word",
       },
@@ -153,14 +121,13 @@ function createSectionTitle(title: string, description: string, theme: PdfTheme)
   const wrapper = createElement("div", {
     display: "grid",
     gap: "6px",
-    marginBottom: "18px",
   });
 
   wrapper.append(
     createElement(
       "div",
       {
-        fontSize: "24px",
+        fontSize: "22px",
         fontWeight: "800",
         color: "#0f172a",
       },
@@ -169,8 +136,8 @@ function createSectionTitle(title: string, description: string, theme: PdfTheme)
     createElement(
       "div",
       {
-        height: "4px",
-        width: "72px",
+        height: "3px",
+        width: "56px",
         borderRadius: "999px",
         background: theme.accent,
       },
@@ -179,7 +146,7 @@ function createSectionTitle(title: string, description: string, theme: PdfTheme)
       "div",
       {
         color: "#475569",
-        fontSize: "15px",
+        fontSize: "14px",
         lineHeight: "1.6",
       },
       description,
@@ -197,13 +164,12 @@ function createItemCard(
   language: ExportLanguage,
 ) {
   const card = createElement("div", {
-    borderRadius: "24px",
+    borderRadius: "22px",
     border: "1px solid #dbe3ef",
     background: "#ffffff",
-    padding: "20px 22px",
+    padding: "18px 20px",
     display: "grid",
-    gap: "16px",
-    boxShadow: "0 16px 40px rgba(15, 23, 42, 0.06)",
+    gap: "14px",
     breakInside: "avoid",
   });
 
@@ -215,16 +181,16 @@ function createItemCard(
   const number = createElement(
     "div",
     {
-      width: "36px",
-      height: "36px",
-      flex: "0 0 36px",
+      width: "34px",
+      height: "34px",
+      flex: "0 0 34px",
       borderRadius: "999px",
       background: theme.accentSoft,
       color: theme.accentText,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      fontSize: "16px",
+      fontSize: "15px",
       fontWeight: "800",
     },
     String(index + 1),
@@ -241,8 +207,8 @@ function createItemCard(
       "div",
       {
         color: "#0f172a",
-        fontSize: "18px",
-        lineHeight: "1.7",
+        fontSize: "16px",
+        lineHeight: "1.65",
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
       },
@@ -278,7 +244,7 @@ function createItemCard(
         width: "100%",
         height: "220px",
         objectFit: "cover",
-        borderRadius: "18px",
+        borderRadius: "16px",
         border: "1px solid #dbe3ef",
         display: "block",
         background: "#e2e8f0",
@@ -306,48 +272,79 @@ function createItemCard(
   return card;
 }
 
-function createListSection(
-  title: string,
-  description: string,
+function createEmptyStateBlock(language: ExportLanguage) {
+  return createElement(
+    "div",
+    {
+      borderRadius: "20px",
+      border: "1px dashed #cbd5e1",
+      background: "#ffffff",
+      color: "#64748b",
+      fontSize: "15px",
+      lineHeight: "1.6",
+      padding: "16px 18px",
+    },
+    getLabel(language, "No items recorded.", "暂无条目。"),
+  );
+}
+
+function createCompactListBlock(
   items: ExportListItem[],
-  attachmentMap: Map<string, string>,
   theme: PdfTheme,
   language: ExportLanguage,
 ) {
-  const section = createElement("section", {
-    display: "grid",
-    gap: "18px",
-  });
-
-  section.append(createSectionTitle(title, description, theme));
-
   if (items.length === 0) {
-    section.append(
-      createElement(
-        "div",
-        {
-          borderRadius: "22px",
-          border: "1px dashed #cbd5e1",
-          background: "#f8fafc",
-          color: "#64748b",
-          fontSize: "16px",
-          lineHeight: "1.6",
-          padding: "18px 20px",
-        },
-        getLabel(language, "No items recorded.", "暂无条目。"),
-      ),
-    );
-    return section;
+    return createEmptyStateBlock(language);
   }
 
-  items.forEach((item, index) => {
-    const images = item.attachments
-      .map((path) => attachmentMap.get(path))
-      .filter((value): value is string => Boolean(value));
-    section.append(createItemCard(item, index, theme, images, language));
+  const block = createElement("div", {
+    borderRadius: "22px",
+    border: "1px solid #dbe3ef",
+    background: "#ffffff",
+    padding: "18px 20px",
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "10px",
   });
 
-  return section;
+  items.forEach((item, index) => {
+    block.append(
+      createElement("div", {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "10px",
+        borderRadius: "999px",
+        padding: "10px 14px",
+        border: `1px solid ${theme.accentSoft}`,
+        background: theme.accentSoft,
+        color: "#0f172a",
+        fontSize: "14px",
+        lineHeight: "1.4",
+        maxWidth: "100%",
+      }),
+    );
+
+    const last = block.lastElementChild as HTMLDivElement | null;
+
+    if (!last) {
+      return;
+    }
+
+    last.append(
+      createElement(
+        "span",
+        {
+          minWidth: "0",
+          color: theme.accentText,
+          fontWeight: "700",
+          wordBreak: "break-word",
+        },
+        item.text.trim() || getLabel(language, `Item ${index + 1}`, `条目 ${index + 1}`),
+      ),
+    );
+  });
+
+  return block;
 }
 
 function filterItems(items: MediaListItem[]) {
@@ -429,80 +426,249 @@ async function waitForImages(root: HTMLElement) {
   );
 }
 
-async function renderNodeToPdf(root: HTMLElement, filename: string) {
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
-  ]);
-
+async function renderElementToCanvas(
+  root: HTMLElement,
+  html2canvas: typeof import("html2canvas").default,
+) {
   if ("fonts" in document) {
     await document.fonts.ready;
   }
 
   await waitForImages(root);
 
-  const canvas = await html2canvas(root, {
+  return await html2canvas(root, {
     backgroundColor: "#ffffff",
     scale: 2,
     useCORS: true,
     logging: false,
   });
+}
+
+function createDocumentMount() {
+  const mount = createElement("div", {
+    position: "fixed",
+    left: "-100000px",
+    top: "0",
+    width: `${CANVAS_WIDTH}px`,
+    background: "#ffffff",
+    pointerEvents: "none",
+    zIndex: "-1",
+  });
+
+  const body = createElement("article", {
+    width: `${CANVAS_WIDTH}px`,
+    background: "#ffffff",
+    color: "#0f172a",
+    fontFamily:
+      '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Arial Unicode MS",sans-serif',
+    boxSizing: "border-box",
+    display: "grid",
+    gap: "18px",
+  });
+
+  mount.append(body);
+  document.body.append(mount);
+
+  return {
+    mount,
+    body,
+  };
+}
+
+function createHeaderBlock({
+  eyebrow,
+  title,
+  description,
+  theme,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  theme: PdfTheme;
+}) {
+  const block = createElement("section", {
+    borderRadius: "28px",
+    border: "1px solid #dbe3ef",
+    borderTop: `10px solid ${theme.accent}`,
+    background: "#ffffff",
+    padding: "28px 30px 26px",
+    display: "grid",
+    gap: "12px",
+  });
+
+  block.append(
+    createElement(
+      "div",
+      {
+        fontSize: "12px",
+        fontWeight: "800",
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        color: theme.accentText,
+      },
+      eyebrow,
+    ),
+    createElement(
+      "h1",
+      {
+        margin: "0",
+        fontSize: "38px",
+        lineHeight: "1.1",
+        fontWeight: "800",
+        letterSpacing: "-0.03em",
+        color: "#0f172a",
+      },
+      title,
+    ),
+    createElement(
+      "p",
+      {
+        margin: "0",
+        fontSize: "16px",
+        lineHeight: "1.7",
+        color: "#475569",
+        maxWidth: "820px",
+      },
+      description,
+    ),
+  );
+
+  return block;
+}
+
+function createMetaGridBlock(
+  metaBlocks: Array<{ label: string; value: string }>,
+) {
+  const wrapper = createElement("section", {
+    display: "grid",
+    gap: "18px",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    borderRadius: "28px",
+    border: "1px solid #dbe3ef",
+    background: "#ffffff",
+    padding: "24px",
+  });
+
+  metaBlocks.forEach((item) => wrapper.append(createMetaBlock(item.label, item.value)));
+
+  return wrapper;
+}
+
+function addCanvasToPdf(
+  pdf: import("jspdf").jsPDF,
+  canvas: HTMLCanvasElement,
+  cursor: { y: number },
+  gapAfterMm: number,
+) {
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - PDF_MARGIN_MM * 2;
+  const usableBottom = pageHeight - PDF_MARGIN_MM - PDF_FOOTER_SPACE_MM;
+  const usableHeight = usableBottom - PDF_MARGIN_MM;
+  const renderHeight = (canvas.height * contentWidth) / canvas.width;
+
+  const appendSlice = (sourceCanvas: HTMLCanvasElement, y: number) => {
+    const imageData = sourceCanvas.toDataURL("image/png");
+    const heightMm = (sourceCanvas.height * contentWidth) / sourceCanvas.width;
+    pdf.addImage(
+      imageData,
+      "PNG",
+      PDF_MARGIN_MM,
+      y,
+      contentWidth,
+      heightMm,
+      undefined,
+      "FAST",
+    );
+    return heightMm;
+  };
+
+  if (renderHeight <= usableBottom - cursor.y) {
+    cursor.y += appendSlice(canvas, cursor.y) + gapAfterMm;
+    return;
+  }
+
+  if (renderHeight <= usableHeight) {
+    pdf.addPage();
+    cursor.y = PDF_MARGIN_MM;
+    cursor.y += appendSlice(canvas, cursor.y) + gapAfterMm;
+    return;
+  }
+
+  let offsetPx = 0;
+
+  while (offsetPx < canvas.height) {
+    let availableMm = usableBottom - cursor.y;
+
+    if (availableMm < 24) {
+      pdf.addPage();
+      cursor.y = PDF_MARGIN_MM;
+      availableMm = usableHeight;
+    }
+
+    const sliceHeightPx = Math.max(
+      1,
+      Math.min(
+        canvas.height - offsetPx,
+        Math.floor((canvas.width * availableMm) / contentWidth),
+      ),
+    );
+
+    const pageCanvas = document.createElement("canvas");
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = sliceHeightPx;
+
+    const context = pageCanvas.getContext("2d");
+    context?.drawImage(
+      canvas,
+      0,
+      offsetPx,
+      canvas.width,
+      sliceHeightPx,
+      0,
+      0,
+      canvas.width,
+      sliceHeightPx,
+    );
+
+    const renderedHeight = appendSlice(pageCanvas, cursor.y);
+    offsetPx += sliceHeightPx;
+
+    if (offsetPx < canvas.height) {
+      pdf.addPage();
+      cursor.y = PDF_MARGIN_MM;
+      continue;
+    }
+
+    cursor.y += renderedHeight + gapAfterMm;
+  }
+}
+
+async function renderBlocksToPdf(
+  blocks: Array<{ element: HTMLElement; gapAfterMm?: number }>,
+  filename: string,
+) {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import("html2canvas"),
+    import("jspdf"),
+  ]);
 
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
     format: "a4",
   });
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  const contentWidth = pageWidth - PDF_MARGIN_MM * 2;
-  const contentHeight = pageHeight - PDF_MARGIN_MM * 2;
-  const pageHeightPx = Math.floor((canvas.width * contentHeight) / contentWidth);
 
-  let pageIndex = 0;
-  let offsetY = 0;
+  const cursor = { y: PDF_MARGIN_MM };
 
-  while (offsetY < canvas.height) {
-    if (pageIndex > 0) {
-      pdf.addPage();
-    }
-
-    const sliceHeight = Math.min(pageHeightPx, canvas.height - offsetY);
-    const pageCanvas = document.createElement("canvas");
-    pageCanvas.width = canvas.width;
-    pageCanvas.height = sliceHeight;
-
-    const context = pageCanvas.getContext("2d");
-    context?.drawImage(
-      canvas,
-      0,
-      offsetY,
-      canvas.width,
-      sliceHeight,
-      0,
-      0,
-      canvas.width,
-      sliceHeight,
-    );
-
-    const imageData = pageCanvas.toDataURL("image/jpeg", 0.92);
-    const renderHeight = (sliceHeight * contentWidth) / canvas.width;
-    pdf.addImage(
-      imageData,
-      "JPEG",
-      PDF_MARGIN_MM,
-      PDF_MARGIN_MM,
-      contentWidth,
-      renderHeight,
-      undefined,
-      "FAST",
-    );
-
-    pageIndex += 1;
-    offsetY += sliceHeight;
+  for (const block of blocks) {
+    const canvas = await renderElementToCanvas(block.element, html2canvas);
+    addCanvasToPdf(pdf, canvas, cursor, block.gapAfterMm ?? PDF_BLOCK_GAP_MM);
   }
 
   const totalPages = pdf.getNumberOfPages();
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(10);
   pdf.setTextColor("#64748b");
@@ -520,69 +686,7 @@ async function renderNodeToPdf(root: HTMLElement, filename: string) {
   pdf.save(filename);
 }
 
-function createDocumentFrame(theme: PdfTheme) {
-  const root = createElement("article", {
-    width: `${CANVAS_WIDTH}px`,
-    background: "#f8fafc",
-    color: "#0f172a",
-    fontFamily:
-      '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Arial Unicode MS",sans-serif',
-    padding: "40px",
-    boxSizing: "border-box",
-    display: "grid",
-    gap: "28px",
-  });
-
-  const shell = createElement("div", {
-    borderRadius: "36px",
-    overflow: "hidden",
-    background: "#ffffff",
-    boxShadow: "0 30px 80px rgba(15, 23, 42, 0.12)",
-    border: "1px solid #dbe3ef",
-  });
-
-  const body = createElement("div", {
-    padding: "32px",
-    display: "grid",
-    gap: "28px",
-    background:
-      "linear-gradient(180deg, rgba(248,250,252,0.96) 0%, rgba(255,255,255,1) 24%)",
-  });
-
-  shell.append(body);
-  root.append(shell);
-
-  const mount = createElement("div", {
-    position: "fixed",
-    left: "-100000px",
-    top: "0",
-    width: `${CANVAS_WIDTH}px`,
-    pointerEvents: "none",
-    zIndex: "-1",
-    opacity: "1",
-  });
-  mount.append(root);
-  document.body.append(mount);
-
-  const header = createElement("section", {
-    background: `linear-gradient(135deg, ${theme.headerBg} 0%, ${theme.accent} 100%)`,
-    color: theme.headerText,
-    padding: "34px 36px 30px",
-    display: "grid",
-    gap: "18px",
-  });
-
-  shell.prepend(header);
-
-  return {
-    mount,
-    body,
-    header,
-  };
-}
-
 async function exportDocument({
-  kind,
   language,
   title,
   eyebrow,
@@ -592,17 +696,12 @@ async function exportDocument({
   filename,
   theme,
 }: {
-  kind: PdfKind;
   language: ExportLanguage;
   title: string;
   eyebrow: string;
   description: string;
   metaBlocks: Array<{ label: string; value: string }>;
-  listSections: Array<{
-    title: string;
-    description: string;
-    items: ExportListItem[];
-  }>;
+  listSections: ExportSection[];
   filename: string;
   theme: PdfTheme;
 }) {
@@ -610,97 +709,81 @@ async function exportDocument({
     section.items.flatMap((item) => item.attachments),
   );
   const attachmentMap = await resolveAttachmentMap(allPaths);
-  const { mount, body, header } = createDocumentFrame(theme);
+  const { mount, body } = createDocumentMount();
 
   try {
-    header.append(
-      createElement(
-        "div",
-        {
-          fontSize: "13px",
-          fontWeight: "800",
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          opacity: "0.76",
-        },
-        eyebrow,
-      ),
-    );
+    const blocks: Array<{ element: HTMLElement; gapAfterMm?: number }> = [];
 
-    const titleRow = createElement("div", {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "flex-start",
-      gap: "18px",
+    const headerBlock = createHeaderBlock({
+      eyebrow,
+      title,
+      description,
+      theme,
     });
-    const titleBlock = createElement("div", {
-      display: "grid",
-      gap: "10px",
-      minWidth: "0",
-    });
-    titleBlock.append(
-      createElement(
-        "h1",
-        {
-          margin: "0",
-          fontSize: "42px",
-          lineHeight: "1.1",
-          fontWeight: "800",
-          letterSpacing: "-0.03em",
-        },
-        title,
-      ),
-      createElement(
-        "p",
-        {
-          margin: "0",
-          maxWidth: "760px",
-          fontSize: "17px",
-          lineHeight: "1.7",
-          color: "rgba(248, 250, 252, 0.9)",
-        },
-        description,
-      ),
-    );
+    body.append(headerBlock);
+    blocks.push({ element: headerBlock, gapAfterMm: 6 });
 
-    const titleChips = createElement("div", {
-      display: "flex",
-      flexWrap: "wrap",
-      justifyContent: "flex-end",
-      gap: "10px",
-      alignSelf: "flex-start",
-    });
-    titleChips.append(
-      createChip("TideOps", theme),
-      createChip(getDocumentKindLabel(kind, language), theme),
-      createChip("PDF", theme),
-    );
-    titleRow.append(titleBlock, titleChips);
-    header.append(titleRow);
-
-    const metaGrid = createElement("section", {
-      display: "grid",
-      gap: "18px",
-      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    });
-
-    metaBlocks.forEach((item) => metaGrid.append(createMetaBlock(item.label, item.value)));
+    const metaGrid = createMetaGridBlock(metaBlocks);
     body.append(metaGrid);
+    blocks.push({ element: metaGrid, gapAfterMm: 6 });
 
     listSections.forEach((section) => {
-      body.append(
-        createListSection(
-          section.title,
-          section.description,
-          section.items,
-          attachmentMap,
-          theme,
-          language,
-        ),
+      if (section.layout === "compact") {
+        const compactWrapper = createElement("section", {
+          display: "grid",
+          gap: "12px",
+          paddingTop: "4px",
+        });
+        compactWrapper.append(
+          createSectionTitle(section.title, section.description, theme),
+          createCompactListBlock(section.items, theme, language),
+        );
+        body.append(compactWrapper);
+        blocks.push({ element: compactWrapper, gapAfterMm: 6 });
+        return;
+      }
+
+      if (section.items.length === 0) {
+        const emptyWrapper = createElement("section", {
+          display: "grid",
+          gap: "12px",
+          paddingTop: "4px",
+        });
+        emptyWrapper.append(
+          createSectionTitle(section.title, section.description, theme),
+          createEmptyStateBlock(language),
+        );
+        body.append(emptyWrapper);
+        blocks.push({ element: emptyWrapper, gapAfterMm: 6 });
+        return;
+      }
+
+      const firstItemImages = section.items[0].attachments
+        .map((path) => attachmentMap.get(path))
+        .filter((value): value is string => Boolean(value));
+      const leadBlock = createElement("section", {
+        display: "grid",
+        gap: "12px",
+        paddingTop: "4px",
+      });
+      leadBlock.append(
+        createSectionTitle(section.title, section.description, theme),
+        createItemCard(section.items[0], 0, theme, firstItemImages, language),
       );
+      body.append(leadBlock);
+      blocks.push({ element: leadBlock, gapAfterMm: 5 });
+
+      section.items.slice(1).forEach((item, index) => {
+        const images = item.attachments
+          .map((path) => attachmentMap.get(path))
+          .filter((value): value is string => Boolean(value));
+        const card = createItemCard(item, index + 1, theme, images, language);
+        body.append(card);
+        blocks.push({ element: card, gapAfterMm: 5 });
+      });
     });
 
-    await renderNodeToPdf(mount, filename);
+    await renderBlocksToPdf(blocks, filename);
   } finally {
     mount.remove();
   }
@@ -722,36 +805,45 @@ export async function exportDailyReportPdf({
   const nextDayPlan = filterItems(report.nextDayPlanItems);
 
   await exportDocument({
-    kind: "daily-report",
     language,
-    title: getLabel(language, "Daily Report", "日报"),
-    eyebrow: getLabel(language, "Field report", "现场日报"),
+    title: getLabel(language, "Service Daily Report", "服务日报"),
+    eyebrow: getLabel(language, "Customer service summary", "客户项目服务摘要"),
     description: getLabel(
       language,
-      "A clean field summary of completed work, active blockers, next-day plan, and attached site photos.",
-      "围绕现场完成工作、当前阻碍、次日计划和相关照片生成的正式日报。",
+      "Prepared for project stakeholders to summarize completed service work, on-site crew coverage, current blockers, next planned steps, and supporting field photos.",
+      "面向项目相关方整理的服务日报，汇总当日完成工作、现场出勤人员、当前阻碍风险、下一步计划及相关现场照片。",
     ),
     metaBlocks: [
       { label: getLabel(language, "Record #", "编号"), value: `#${report.recordNumber}` },
       { label: getLabel(language, "Project", "项目"), value: projectName },
-      { label: getLabel(language, "Author", "提交人"), value: authorName },
+      { label: getLabel(language, "Submitted by", "提交人"), value: authorName },
       {
         label: getLabel(language, "Date", "日期"),
         value: formatDisplayDate(report.date, language),
       },
       { label: getLabel(language, "Shift", "班次"), value: report.shift || "--" },
       {
-        label: getLabel(language, "Arrive / depart", "到场 / 离场"),
+        label: getLabel(language, "On-site / off-site", "到场 / 离场"),
         value: `${report.startTime || "--"} / ${report.endTime || "--"}`,
       },
     ],
     listSections: [
       {
+        title: getLabel(language, "Today's field crew", "今日出勤人员"),
+        description: getLabel(
+          language,
+          "Personnel confirmed on site during the reporting period, including team members and temporary support.",
+          "本报告时段内确认到场的现场人员，包括平台成员及临时支援人员。",
+        ),
+        items: stringArrayToItems(report.fieldCrew),
+        layout: "compact",
+      },
+      {
         title: getLabel(language, "Major tasks", "主要工作"),
         description: getLabel(
           language,
-          "What was completed on site today.",
-          "记录今天在现场完成的工作。",
+          "Work completed or materially advanced during today's customer service window.",
+          "面向客户交付、当日已完成或明显推进的工作。",
         ),
         items: majorTasks,
       },
@@ -759,8 +851,8 @@ export async function exportDailyReportPdf({
         title: getLabel(language, "Blockers / risks", "阻碍 / 风险"),
         description: getLabel(
           language,
-          "Open blockers, issues, or delivery risks that need follow-up.",
-          "记录需要跟进的阻碍、问题或交付风险。",
+          "Open items affecting schedule, site access, safety, quality, or delivery readiness.",
+          "当前影响进度、现场条件、安全、质量或交付准备的事项。",
         ),
         items: blockers,
       },
@@ -768,8 +860,8 @@ export async function exportDailyReportPdf({
         title: getLabel(language, "Next-day plan", "次日计划"),
         description: getLabel(
           language,
-          "The next work items planned for the coming day.",
-          "记录下一工作日准备继续推进的事项。",
+          "Planned next steps for the next service window or workday.",
+          "下一服务时段或下一工作日计划推进的事项。",
         ),
         items: nextDayPlan,
       },
@@ -795,14 +887,13 @@ export async function exportIncidentPdf({
   const followUps = filterItems(incident.followUpItems);
 
   await exportDocument({
-    kind: "incident",
     language,
-    title: getLabel(language, "Incident Record", "异常记录"),
-    eyebrow: getLabel(language, "Field incident", "现场异常"),
+    title: getLabel(language, "Service Incident Record", "服务异常记录"),
+    eyebrow: getLabel(language, "Project issue documentation", "项目异常记录"),
     description: getLabel(
       language,
-      "A structured incident record covering what happened, immediate action, follow-up, and supporting images.",
-      "围绕事实、即时动作、后续跟进和现场照片生成的结构化异常记录。",
+      "Prepared for project stakeholders to document the issue observed on site, immediate containment actions, follow-up work, and supporting field images.",
+      "面向项目相关方整理的异常记录，说明现场问题事实、即时控制动作、后续跟进事项及相关现场图片。",
     ),
     metaBlocks: [
       { label: getLabel(language, "Record #", "编号"), value: `#${incident.recordNumber}` },
@@ -827,8 +918,8 @@ export async function exportIncidentPdf({
         title: getLabel(language, "What happened", "发生了什么"),
         description: getLabel(
           language,
-          "The observed facts and sequence of the incident.",
-          "记录现场观察到的事实和发生顺序。",
+          "Observed issue details captured for customer communication and follow-up review.",
+          "供客户沟通和后续复盘使用的现场事实记录。",
         ),
         items: facts,
       },
@@ -836,8 +927,8 @@ export async function exportIncidentPdf({
         title: getLabel(language, "Immediate action", "即时动作"),
         description: getLabel(
           language,
-          "Actions taken right away to control or reduce risk.",
-          "记录现场立刻采取的控制或降险动作。",
+          "Immediate containment, protection, or recovery actions taken on site.",
+          "现场已立即采取的控制、保护或恢复动作。",
         ),
         items: immediateActions,
       },
@@ -845,8 +936,8 @@ export async function exportIncidentPdf({
         title: getLabel(language, "Follow-up / closeout", "后续跟进"),
         description: getLabel(
           language,
-          "Next actions, corrective work, or closure items.",
-          "记录后续整改、跟进或关闭事项。",
+          "Further corrective work, ownership items, or closure steps.",
+          "后续整改、责任跟进或关闭事项。",
         ),
         items: followUps,
       },
@@ -868,14 +959,13 @@ export async function exportSafetyCheckinPdf({
   language: ExportLanguage;
 }) {
   await exportDocument({
-    kind: "safety-checkin",
     language,
-    title: getLabel(language, "Safety Check-in", "安全签到"),
-    eyebrow: getLabel(language, "Field safety", "现场安全"),
+    title: getLabel(language, "Safety Briefing Record", "安全签到记录"),
+    eyebrow: getLabel(language, "Pre-work field safety record", "开工前安全记录"),
     description: getLabel(
       language,
-      "A structured pre-work safety record covering the work scope, hazards, PPE checks, briefing topic, and field notes.",
-      "围绕作业内容、风险、PPE 检查、briefing topic 和现场备注生成的结构化安全签到记录。",
+      "Prepared before field activity begins to confirm work scope, key hazards, PPE readiness, briefing points, and supporting notes for the project team and site stakeholders.",
+      "面向项目团队及现场相关方整理的开工前安全记录，确认作业内容、关键风险、PPE 准备情况、briefing 要点及补充备注。",
     ),
     metaBlocks: [
       { label: getLabel(language, "Record #", "编号"), value: `#${checkin.recordNumber}` },
@@ -897,38 +987,41 @@ export async function exportSafetyCheckinPdf({
     ],
     listSections: [
       {
-        title: getLabel(language, "Task types", "任务类型"),
+        title: getLabel(language, "Work scope", "作业范围"),
         description: getLabel(
           language,
-          "The main task categories covered by this briefing.",
-          "本次安全签到覆盖的主要任务类型。",
+          "The work categories covered by this pre-job safety review.",
+          "本次开工前安全确认所覆盖的作业类型。",
         ),
         items: stringArrayToItems(checkin.taskTypes),
+        layout: "compact",
       },
       {
-        title: getLabel(language, "Hazards", "风险项"),
+        title: getLabel(language, "Key hazards", "关键风险"),
         description: getLabel(
           language,
-          "Key hazards identified before work started.",
-          "开工前识别出的主要风险项。",
+          "Primary hazards identified before work started.",
+          "开工前已识别的主要风险项。",
         ),
         items: stringArrayToItems(checkin.hazardFlags),
+        layout: "compact",
       },
       {
-        title: getLabel(language, "PPE checks", "PPE 检查"),
+        title: getLabel(language, "PPE confirmed", "PPE 确认"),
         description: getLabel(
           language,
-          "Protective equipment confirmed for this shift.",
-          "本班次已确认的个人防护装备。",
+          "Protective equipment verified for this shift.",
+          "本班次已确认到位的个人防护装备。",
         ),
         items: stringArrayToItems(checkin.ppeFlags),
+        layout: "compact",
       },
       {
         title: getLabel(language, "Briefing topic", "安全 briefing"),
         description: getLabel(
           language,
-          "The key talk track used before work began.",
-          "开工前沟通的重点 briefing 内容。",
+          "Core safety points communicated before work began.",
+          "开工前已沟通的重点安全提示。",
         ),
         items: stringArrayToItems([checkin.briefingTopic]),
       },
@@ -936,8 +1029,8 @@ export async function exportSafetyCheckinPdf({
         title: getLabel(language, "Notes", "备注"),
         description: getLabel(
           language,
-          "Additional notes captured during the safety check-in.",
-          "安全签到时补充记录的现场备注。",
+          "Additional site notes recorded during the safety confirmation.",
+          "安全确认过程中补充记录的现场备注。",
         ),
         items: stringArrayToItems([checkin.notes]),
       },
