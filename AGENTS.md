@@ -59,6 +59,7 @@ After finishing any meaningful task:
 - Verified on `2026-04-06`: in the current Supabase storage schema, `storage.objects.owner_id` compares as `text`, so media policies must use `auth.uid()::text` rather than `auth.uid()` to avoid `operator does not exist: text = uuid`.
 - Verified on `2026-04-06`: once the `field-media` bucket and policies exist, `400` uploads are most likely caused by bucket restrictions, especially narrow `allowed_mime_types`. For mobile/browser image uploads, `image/*` is more robust than an explicit short allowlist because devices can emit MIME variants such as `image/jpg` or HEIC/HEIF variants.
 - Verified on `2026-04-06`: if operations managers need to delete daily reports or incidents with attached field photos, `storage.objects` also needs an operations-manager delete policy for the `field-media` bucket. Table-level delete alone is not enough to remove uploaded attachments.
+- Verified on `2026-04-06`: if operations managers need to export report or incident PDFs with images uploaded by other users, `storage.objects` also needs an operations-manager select policy for the `field-media` bucket. Owner-only read policies are not enough for manager exports.
 - RLS helper functions that read from RLS-protected tables such as `profiles`, `projects`, or `project_assignments` must be created as `security definer` with `set search_path = public`. Otherwise Supabase can hit recursive policy evaluation and return `500` for basic `select` queries.
 - Keep comment lines in `.env.local` commented. A plain text line without `#` becomes an unparsed env line and should be cleaned up.
 - On `2026-04-06`, `git push origin main` to `https://github.com/xinnnan/TideOps.git` succeeded again from this machine after the earlier GitHub access issue was resolved externally. If push failures return later, re-check which GitHub account the machine is using before changing repo config.
@@ -123,16 +124,18 @@ After finishing any meaningful task:
 - In dense admin workspaces, avoid duplicating level controls. Do not keep one tab set in the middle column and a second tab set in the right detail pane for the same hierarchy.
 - Keep responsibility split cleanly: left column locates the top-level record, middle column chooses the concrete child/action, and right column edits only the current selection.
 - Avoid duplicate search scopes. If the middle column already searches child records such as assignments or sites/projects, the left directory search should stay focused on top-level records.
+- The lower-left sidebar account panel should be role-aware: operations managers can see the multi-company list, but ordinary service engineers should only see their own home company there.
 - Weekly/monthly summary views are now part of attendance and safety, so future changes should preserve both field entry and period-level review in the same page.
 - Leave should stay inside the attendance experience. `/leave` should behave as a redirect into the attendance leave tab rather than acting like a separate workflow screen.
 - Operations managers can also submit leave requests. Team-wide attendance summaries and team exception views should stay hidden from ordinary service engineers.
 - Leave type is currently fixed to `unpaid` in the UI. Do not expose a leave-type dropdown again until PTO or other leave categories become a real configurable feature.
-- PDF export for daily reports and incidents currently exports structured text plus item-level photo counts; inline photo embedding is not implemented yet.
+- Updated on `2026-04-06`: report and incident PDF export now works best through a browser-rendered capture path (`html2canvas` -> paged `jsPDF`) instead of raw `jsPDF` text drawing. This avoids Chinese font breakage and preserves attached images and layout styling in the final PDF.
+- Updated on `2026-04-06`: safety check-in PDF export now uses that same browser-rendered bilingual export path, so safety, report, and incident exports all follow one consistent Chinese-safe rendering approach.
 - Verified on `2026-04-06`: deleting a safety check-in can fail if a daily report still points at it through `daily_reports.safety_checkin_id`. The safe delete flow is to null out those references first, then remove the safety record.
 - For daily reports and incidents, keep numbered-list entry strictly item-by-item. Do not reintroduce multi-line paste that automatically splits text into multiple numbered items.
 - In report and incident numbered-list entry, keep the add action inside the list input area, near the current items. Do not move the add button back up into the section header row.
 - In report and incident feeds, service engineers should only see and search their own records. Operations managers can see all records and should get filter controls such as reporter, project, site, and date.
-- Verified on `2026-04-06`: `Report` and `Incident` already follow the intended role split, and `Attendance` also hides team summary views from engineers. `Safety` does not yet match that access model; its recent-record and summary sections still read from the full `safetyCheckins` list for all users, and safety PDF export is not implemented.
+- Verified on `2026-04-06`: `Report` and `Incident` already follow the intended role split, and `Attendance` also hides team summary views from engineers. `Safety` still does not yet match that access model; its recent-record and summary sections still read from the full `safetyCheckins` list for all users. Safety PDF export is now implemented.
 - In Next.js 16 app routes, avoid `useSearchParams()` directly in statically built pages unless you intentionally wrap the read in `Suspense`. For simple client-only notices on login-like pages, reading `window.location.search` after hydration is the simpler path.
 - For auth/session effects in React 19, prefer `useEffectEvent` when the effect needs the latest async loader without creating dependency churn.
 - For TideOps page chrome, avoid stacking multiple translucent shells on top of tinted or gradient canvases. A flat app background plus solid surface cards is more stable and prevents visible color banding across long forms and admin workspaces.
@@ -152,16 +155,15 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Let operations managers delete attendance logs, safety check-ins, daily reports, and incidents, while service engineers cannot delete any of those records.
+- Make the lower-left sidebar account panel role-aware so ordinary service engineers do not see a multi-company list.
 
 Checklist:
 
-- [x] Re-read project continuity notes before the delete-permission update
-- [x] Add manager-only delete actions in the app state layer
-- [x] Add manager-only delete policies for the four record tables
-- [x] Add manager-only delete controls to the attendance, safety, report, and incident pages
-- [x] Keep field-media storage policies aligned so manager record deletion can also remove attachments
-- [x] Run lint and build after wiring the UI
+- [x] Re-read project continuity notes before the sidebar account update
+- [x] Find where the lower-left company cards are rendered
+- [x] Keep multi-company cards for operations managers
+- [x] Restrict service engineers to their own home company card only
+- [x] Run lint and build after the sidebar update
 
 Most likely next tasks:
 

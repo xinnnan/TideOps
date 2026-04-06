@@ -24,8 +24,18 @@ const navConfig = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { companies, copy, currentUser, language, logout, toggleLanguage } =
-    useAppState();
+  const {
+    companies,
+    copy,
+    currentUser,
+    isOperationsManager,
+    language,
+    logout,
+    toggleLanguage,
+  } = useAppState();
+  const visibleCompanies = isOperationsManager
+    ? companies.slice(0, 4)
+    : companies.filter((company) => company.id === currentUser?.homeCompanyId).slice(0, 1);
 
   const todayLabel = new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
     weekday: "long",
@@ -100,7 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="mt-5 space-y-3">
-              {companies.slice(0, 4).map((company) => (
+              {visibleCompanies.map((company) => (
                 <div
                   key={company.id}
                   className="rounded-2xl border border-white/10 px-4 py-3"

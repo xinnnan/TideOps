@@ -15,6 +15,7 @@ import {
 import { TabBar } from "@/components/ui/tab-bar";
 import { generateBriefingSuggestion } from "@/lib/briefing-suggestions";
 import { hazardOptions, ppeOptions, safetyTaskOptions } from "@/lib/form-options";
+import { exportSafetyCheckinPdf } from "@/lib/pdf-export";
 import { formatPeriodLabel, isDateInPeriod, shiftPeriod, type SummaryScope } from "@/lib/periods";
 import { formatDisplayDate } from "@/lib/utils";
 
@@ -140,6 +141,27 @@ export default function SafetyPage() {
           : "Safety check-in deleted."
         : result.error ?? "",
     );
+  }
+
+  async function handleExportSafetyCheckin(safetyCheckinId: string) {
+    const checkin = safetyCheckins.find((item) => item.id === safetyCheckinId);
+
+    if (!checkin) {
+      return;
+    }
+
+    const projectName =
+      projects.find((project) => project.id === checkin.projectId)?.name ?? checkin.projectId;
+    const authorName =
+      profiles.find((profile) => profile.id === checkin.authorUserId)?.fullName ??
+      checkin.authorUserId;
+
+    await exportSafetyCheckinPdf({
+      checkin,
+      projectName,
+      authorName,
+      language,
+    });
   }
 
   return (
@@ -328,6 +350,13 @@ export default function SafetyPage() {
                       <Badge tone={record.status === "submitted" ? "accent" : "success"}>
                         {record.status}
                       </Badge>
+                      <button
+                        type="button"
+                        onClick={() => void handleExportSafetyCheckin(record.id)}
+                        className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                      >
+                        {language === "zh" ? "导出 PDF" : "Export PDF"}
+                      </button>
                       {isOperationsManager ? (
                         <button
                           type="button"
