@@ -142,16 +142,15 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Prepare the current TideOps app for its first real GitHub save point before Vercel deployment. The local commit is complete, but pushing is blocked because the current machine authenticates to GitHub as `gaoqiantu`, which does not have write access to `xinnnan/TideOps`.
+- Refresh the README so the repository is ready for GitHub and Vercel handoff, then retry the push. Keep the repo public-safe, keep deployment guidance concise, and verify whether GitHub write access has been fixed.
 
 Checklist:
 
-- [x] Re-read project continuity notes before starting the background consistency pass
-- [x] Re-read project continuity notes before the Git save point
-- [x] Confirm tracked vs ignored files so `.env.local` and the private PRD remain excluded
-- [x] Commit the current TideOps application state on `main`
-- [ ] Push the commit to `origin/main`
-- [ ] Keep notes updated for the later Vercel deployment step
+- [x] Re-read project continuity notes before the README and push pass
+- [ ] Update README to match the current TideOps app and deployment flow
+- [ ] Commit the README update
+- [ ] Retry `git push origin main`
+- [ ] Record whether GitHub access is still blocked
 
 Most likely next tasks:
 
