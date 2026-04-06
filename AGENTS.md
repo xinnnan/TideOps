@@ -103,6 +103,7 @@ After finishing any meaningful task:
 - Do not rely only on `input type="file" capture="environment"` for mobile photo capture. For report/incident item photos, provide a real `getUserMedia` camera flow with file-input fallback because browser capture behavior is inconsistent.
 - Safety briefing topics can be suggested from selected task types and hazards, but users should remain able to accept or override the generated text.
 - Product-facing copy should focus on how teams use the app. Avoid leading with architecture or implementation details in the main UI unless the user is in an explicit setup/error state.
+- The repository README should also stay user-friendly and deployment-friendly. Prefer explaining what TideOps does, who uses it, how to start it, and how to deploy it over low-level codebase inventory.
 - Even setup and error states should stay user-facing when possible. Prefer guidance like "contact your administrator" or "choose the project again" over raw Supabase, migration, or env-var instructions inside the product UI.
 - Admin should not remain a flat page. Use tabs to separate overview, users, hierarchy, project network, contacts, and audit.
 - Admin must also expose an `Account` area that is available to all users, not only operations managers.
@@ -155,15 +156,14 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Make the lower-left sidebar account panel role-aware so ordinary service engineers do not see a multi-company list.
+- Refresh the README so it is easier for users and deployers to understand what TideOps does, how to start it, and how to deploy it.
 
 Checklist:
 
-- [x] Re-read project continuity notes before the sidebar account update
-- [x] Find where the lower-left company cards are rendered
-- [x] Keep multi-company cards for operations managers
-- [x] Restrict service engineers to their own home company card only
-- [x] Run lint and build after the sidebar update
+- [x] Re-read project continuity notes before editing the README
+- [x] Review the current README structure
+- [x] Rewrite the README with clearer user-facing and deployer-facing sections
+- [ ] Commit and push the README update after review
 
 Most likely next tasks:
 
