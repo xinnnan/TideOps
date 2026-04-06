@@ -8,7 +8,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "noise-panel surface-ring rounded-[28px] bg-surface",
+        "surface-ring rounded-[28px] bg-surface",
         className,
       )}
       {...props}

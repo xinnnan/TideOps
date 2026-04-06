@@ -130,6 +130,8 @@ After finishing any meaningful task:
 - In Next.js 16 app routes, avoid `useSearchParams()` directly in statically built pages unless you intentionally wrap the read in `Suspense`. For simple client-only notices on login-like pages, reading `window.location.search` after hydration is the simpler path.
 - For auth/session effects in React 19, prefer `useEffectEvent` when the effect needs the latest async loader without creating dependency churn.
 - For TideOps page chrome, avoid stacking multiple translucent shells on top of tinted or gradient canvases. A flat app background plus solid surface cards is more stable and prevents visible color banding across long forms and admin workspaces.
+- Do not put decorative texture overlays such as `noise-panel` on the default shared `Card` component. Large cards and long admin workspaces make those overlays visible as horizontal page bands once the page scrolls.
+- Keep shared shell shadows subtle. Large blur shadows on sticky sidebars or full-width workspace cards can read like background color shifts on long pages.
 
 ### Current Verified State
 
@@ -142,19 +144,19 @@ After finishing any meaningful task:
 
 Task summary:
 
-- README refresh and GitHub handoff are complete. The repo now includes the updated deployment guidance, and `main` was pushed successfully for the next Vercel deployment step.
+- The long-page background banding fix is confirmed by the user. Save the shared style cleanup to git and push it to `origin/main`.
 
 Checklist:
 
-- [x] Re-read project continuity notes before the README and push pass
-- [x] Update README to match the current TideOps app and deployment flow
-- [x] Commit the README update
-- [x] Retry `git push origin main`
-- [x] Record whether GitHub access is still blocked
+- [x] Re-read project continuity notes before the save-and-push pass
+- [x] Remove remaining shared decorative layers that can create horizontal banding on long cards
+- [x] Reduce shared shell shadows so large sticky/layout containers do not tint the page background
+- [x] Run lint and build after the background cleanup
+- [ ] Commit and push the confirmed background fix
 
 Most likely next tasks:
 
-- [ ] After the Git push, configure Vercel project env vars from local `.env.local` rather than from committed files
+- [ ] After the push, configure Vercel project env vars from local `.env.local` rather than from committed files
 - [ ] Import the repo into Vercel and set `NEXT_PUBLIC_SUPABASE_URL` plus `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - [ ] Add the Vercel production URL back into Supabase `Site URL` and redirect allow list
 - [ ] If TideOps later needs more visual atmosphere, reintroduce it through one controlled background treatment instead of stacking multiple translucent overlays
