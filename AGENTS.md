@@ -57,7 +57,7 @@ After finishing any meaningful task:
 - Item-level photo associations for daily reports and incidents also depend on `supabase/migrations/20260405173500_item_level_media.sql`.
 - RLS helper functions that read from RLS-protected tables such as `profiles`, `projects`, or `project_assignments` must be created as `security definer` with `set search_path = public`. Otherwise Supabase can hit recursive policy evaluation and return `500` for basic `select` queries.
 - Keep comment lines in `.env.local` commented. A plain text line without `#` becomes an unparsed env line and should be cleaned up.
-- For GitHub publishing on this machine, the outbound Git identity currently resolves to `gaoqiantu` for both HTTPS and SSH. Pushing to `https://github.com/xinnnan/TideOps.git` will fail with `403` until that account is granted write access or the git remote/auth is switched to an authorized `xinnnan` credential.
+- On `2026-04-06`, `git push origin main` to `https://github.com/xinnnan/TideOps.git` succeeded again from this machine after the earlier GitHub access issue was resolved externally. If push failures return later, re-check which GitHub account the machine is using before changing repo config.
 
 ### Auth And Onboarding
 
@@ -142,20 +142,21 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Refresh the README so the repository is ready for GitHub and Vercel handoff, then retry the push. Keep the repo public-safe, keep deployment guidance concise, and verify whether GitHub write access has been fixed.
+- README refresh and GitHub handoff are complete. The repo now includes the updated deployment guidance, and `main` was pushed successfully for the next Vercel deployment step.
 
 Checklist:
 
 - [x] Re-read project continuity notes before the README and push pass
-- [ ] Update README to match the current TideOps app and deployment flow
-- [ ] Commit the README update
-- [ ] Retry `git push origin main`
-- [ ] Record whether GitHub access is still blocked
+- [x] Update README to match the current TideOps app and deployment flow
+- [x] Commit the README update
+- [x] Retry `git push origin main`
+- [x] Record whether GitHub access is still blocked
 
 Most likely next tasks:
 
 - [ ] After the Git push, configure Vercel project env vars from local `.env.local` rather than from committed files
-- [ ] Resolve GitHub write access for `xinnnan/TideOps` on this machine before retrying `git push origin main`
+- [ ] Import the repo into Vercel and set `NEXT_PUBLIC_SUPABASE_URL` plus `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- [ ] Add the Vercel production URL back into Supabase `Site URL` and redirect allow list
 - [ ] If TideOps later needs more visual atmosphere, reintroduce it through one controlled background treatment instead of stacking multiple translucent overlays
 - [ ] Keep tightening remaining admin copy so feature names stay clear without slipping back into implementation vocabulary
 
