@@ -46,6 +46,10 @@ function dedupeNames(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
+function getDefaultFieldCrew(currentUserName?: string) {
+  return currentUserName?.trim() ? [currentUserName.trim()] : [];
+}
+
 export default function ReportPage() {
   const {
     attendanceLogs,
@@ -75,7 +79,9 @@ export default function ReportPage() {
   const [majorTasks, setMajorTasks] = useState([createDraftMediaListItem()]);
   const [blockers, setBlockers] = useState([createDraftMediaListItem()]);
   const [nextDayPlan, setNextDayPlan] = useState([createDraftMediaListItem()]);
-  const [fieldCrew, setFieldCrew] = useState<string[]>([]);
+  const [fieldCrew, setFieldCrew] = useState<string[]>(
+    getDefaultFieldCrew(currentUser?.fullName),
+  );
   const [selectedCrewUserId, setSelectedCrewUserId] = useState("");
   const [manualCrewName, setManualCrewName] = useState("");
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
@@ -224,7 +230,7 @@ export default function ReportPage() {
     setMajorTasks([createDraftMediaListItem()]);
     setBlockers([createDraftMediaListItem()]);
     setNextDayPlan([createDraftMediaListItem()]);
-    setFieldCrew([]);
+    setFieldCrew(getDefaultFieldCrew(currentUser?.fullName));
     setSelectedCrewUserId("");
     setManualCrewName("");
   }
@@ -293,7 +299,14 @@ export default function ReportPage() {
     setProjectId(report.projectId);
     setStartTime(extractTimeInputValue(report.startTime));
     setEndTime(extractTimeInputValue(report.endTime));
-    setFieldCrew(report.fieldCrew);
+    setFieldCrew(
+      report.fieldCrew.length > 0
+        ? report.fieldCrew
+        : getDefaultFieldCrew(
+            profiles.find((profile) => profile.id === report.authorUserId)?.fullName ??
+              currentUser?.fullName,
+          ),
+    );
     setSelectedCrewUserId("");
     setManualCrewName("");
     setMajorTasks(createDraftMediaItemsFromStoredItems(report.majorTaskItems));
@@ -353,11 +366,21 @@ export default function ReportPage() {
     const authorName =
       profiles.find((profile) => profile.id === report.authorUserId)?.fullName ??
       report.authorUserId;
+    const matchingAttendance = attendanceLogs.find(
+      (log) =>
+        log.userId === report.authorUserId &&
+        log.projectId === report.projectId &&
+        log.date === report.date,
+    );
 
     await exportDailyReportPdf({
       report,
       projectName,
       authorName,
+      fallbackStartTime: extractTimeInputValue(matchingAttendance?.clockInTime),
+      fallbackEndTime: extractTimeInputValue(matchingAttendance?.clockOutTime),
+      fallbackFieldCrew:
+        report.fieldCrew.length > 0 ? report.fieldCrew : getDefaultFieldCrew(authorName),
       language,
     });
   }
@@ -831,6 +854,10 @@ export default function ReportPage() {
                           <p className="mt-1 text-xs text-slate-500">
                             {language === "zh" ? "今日出勤人员" : "Field crew"}:{" "}
                             {report.fieldCrew.join(language === "zh" ? "、" : ", ")}
+                          </p>
+                        ) : authorName ? (
+                          <p className="mt-1 text-xs text-slate-500">
+                            {language === "zh" ? "今日出勤人员" : "Field crew"}: {authorName}
                           </p>
                         ) : null}
                       </div>

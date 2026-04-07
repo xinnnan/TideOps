@@ -793,16 +793,31 @@ export async function exportDailyReportPdf({
   report,
   projectName,
   authorName,
+  fallbackStartTime,
+  fallbackEndTime,
+  fallbackFieldCrew,
   language,
 }: {
   report: DailyReport;
   projectName: string;
   authorName: string;
+  fallbackStartTime?: string | null;
+  fallbackEndTime?: string | null;
+  fallbackFieldCrew?: string[];
   language: ExportLanguage;
 }) {
   const majorTasks = filterItems(report.majorTaskItems);
   const blockers = filterItems(report.blockerItems);
   const nextDayPlan = filterItems(report.nextDayPlanItems);
+  const resolvedStartTime = report.startTime || fallbackStartTime || "--";
+  const resolvedEndTime = report.endTime || fallbackEndTime || "--";
+  const resolvedFieldCrew = Array.from(
+    new Set(
+      (report.fieldCrew.length > 0 ? report.fieldCrew : fallbackFieldCrew ?? [])
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
 
   await exportDocument({
     language,
@@ -824,7 +839,13 @@ export async function exportDailyReportPdf({
       { label: getLabel(language, "Shift", "班次"), value: report.shift || "--" },
       {
         label: getLabel(language, "On-site / off-site", "到场 / 离场"),
-        value: `${report.startTime || "--"} / ${report.endTime || "--"}`,
+        value: `${resolvedStartTime} / ${resolvedEndTime}`,
+      },
+      {
+        label: getLabel(language, "Field crew", "出勤人员"),
+        value:
+          resolvedFieldCrew.join(language === "zh" ? "、" : ", ") ||
+          getLabel(language, "--", "--"),
       },
     ],
     listSections: [
@@ -835,7 +856,7 @@ export async function exportDailyReportPdf({
           "Personnel confirmed on site during the reporting period, including team members and temporary support.",
           "本报告时段内确认到场的现场人员，包括平台成员及临时支援人员。",
         ),
-        items: stringArrayToItems(report.fieldCrew),
+        items: stringArrayToItems(resolvedFieldCrew),
         layout: "compact",
       },
       {

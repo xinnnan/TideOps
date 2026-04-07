@@ -134,6 +134,7 @@ After finishing any meaningful task:
 - Updated on `2026-04-06`: safety check-in PDF export now uses that same browser-rendered bilingual export path, so safety, report, and incident exports all follow one consistent Chinese-safe rendering approach.
 - Updated on `2026-04-06`: exported PDFs paginate more cleanly when rendered block-by-block instead of as one long page canvas. Keep section titles attached to their first content block so headings do not get stranded at the bottom of a page.
 - Updated on `2026-04-06`: daily reports now carry a `field_crew_json` list. This is a flat string array that can mix platform users and manually entered external names, and it should appear both in the in-app report feed and in exported PDFs.
+- Updated on `2026-04-06`: client-facing daily report PDFs should not leave attendance context blank just because the author skipped a field. Prefer saved report values first, then fall back to attendance times and at least the author name for field crew when exporting or saving sparse reports.
 - Verified on `2026-04-06`: deleting a safety check-in can fail if a daily report still points at it through `daily_reports.safety_checkin_id`. The safe delete flow is to null out those references first, then remove the safety record.
 - For daily reports and incidents, keep numbered-list entry strictly item-by-item. Do not reintroduce multi-line paste that automatically splits text into multiple numbered items.
 - In report and incident numbered-list entry, keep the add action inside the list input area, near the current items. Do not move the add button back up into the section header row.
@@ -163,17 +164,19 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Tighten the dark-form control styling. Date, time, and datetime picker icons in pages like daily report should stay visible against dark backgrounds, and other similar native controls in those dark cards should use the same high-contrast treatment.
+- Make sure exported PDFs do not drop attendance-related context. Recheck safety, daily report, and incident exports, and tighten the daily report flow so arrival/departure times and field-crew names are easier to keep populated and editable.
 
 Checklist:
 
-- [x] Re-read project continuity notes and inspect native picker usage in the workspace
-- [x] Add a shared dark native-control class for date/time/datetime and select styling
-- [x] Apply the shared class across report, safety, and incident dark forms
-- [x] Run lint/build and update continuity notes if the pattern should be kept
+- [x] Re-read project continuity notes and inspect attendance and PDF export flows
+- [x] Add safer daily report defaults and fallback handling for field crew and attendance times
+- [x] Make the daily report export prefer saved values but fall back to attendance or author info when those fields are empty
+- [x] Recheck safety and incident exports for visible people/context fields and keep editability intact
+- [x] Run lint/build and update continuity notes if the rule should persist
 
 Most likely next tasks:
 
+- [ ] If more records later need "people on site" data, add an explicit shared participant model instead of inferring everything from author names
 - [ ] If more dark cards get date/time/select controls later, reuse `dark-native-control` instead of copying browser-specific pseudo-element styles
 - [ ] After this feature lands, run the new daily-report attendee migration in Supabase before testing in Vercel
 - [ ] If field crew later needs richer structure such as lead/technician roles, store that in a separate JSON object instead of overloading a flat string list

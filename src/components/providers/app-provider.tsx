@@ -1955,6 +1955,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Add at least one next-day plan item before submitting.",
       };
     }
+    const normalizedFieldCrew = Array.from(
+      new Set(
+        (
+          payload.fieldCrew.length > 0 ? payload.fieldCrew : [currentUser.fullName]
+        )
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    );
     const startTime = payload.startTime || project.shiftStartTime || "";
     const endTime = payload.endTime || project.shiftEndTime || "";
     const shift =
@@ -1989,9 +1998,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         issue_status: blockerItems.length > 0 ? "monitoring" : "resolved",
         next_day_plan: nextDayPlanItems.map((item) => item.text).join("\n"),
         blockers: blockerItems.map((item) => item.text).join("\n") || null,
-        field_crew_json: Array.from(
-          new Set(payload.fieldCrew.map((item) => item.trim()).filter(Boolean)),
-        ),
+        field_crew_json: normalizedFieldCrew,
         major_tasks_items_json: majorTaskItems,
         blocker_items_json: blockerItems,
         next_day_plan_items_json: nextDayPlanItems,
@@ -2086,6 +2093,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Keep at least one major task and one next-day plan item.",
       };
     }
+    const defaultCrewName =
+      workspace.profiles.find((profile) => profile.id === target.authorUserId)?.fullName ??
+      currentUser.fullName;
+    const normalizedFieldCrew = Array.from(
+      new Set(
+        (
+          payload.fieldCrew.length > 0 ? payload.fieldCrew : [defaultCrewName]
+        )
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    );
 
     let laborHours: number | null = null;
 
@@ -2114,9 +2133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         issue_status: blockerItems.length > 0 ? "monitoring" : "resolved",
         next_day_plan: nextDayPlanItems.map((item) => item.text).join("\n"),
         blockers: blockerItems.map((item) => item.text).join("\n") || null,
-        field_crew_json: Array.from(
-          new Set(payload.fieldCrew.map((item) => item.trim()).filter(Boolean)),
-        ),
+        field_crew_json: normalizedFieldCrew,
         major_tasks_items_json: majorTaskItems,
         blocker_items_json: blockerItems,
         next_day_plan_items_json: nextDayPlanItems,
