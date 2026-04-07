@@ -152,6 +152,7 @@ After finishing any meaningful task:
 - Do not put decorative texture overlays such as `noise-panel` on the default shared `Card` component. Large cards and long admin workspaces make those overlays visible as horizontal page bands once the page scrolls.
 - Keep shared shell shadows subtle. Large blur shadows on sticky sidebars or full-width workspace cards can read like background color shifts on long pages.
 - For dark form cards that use native browser date/time/datetime or select controls, apply one shared high-contrast class instead of ad hoc per-page fixes. Native picker indicators and arrows need explicit dark-mode styling or they disappear against translucent dark backgrounds.
+- Updated on `2026-04-07`: browser tinting alone is not enough for dark native controls. The reliable fix is to hide the browser-colored picker indicator and draw a custom white calendar/clock/chevron background icon while keeping the native control interactive.
 - Keep page copy task-focused. Avoid roadmap wording such as "can be added later", internal process explanations, or setup-style narration in normal workflows. Prefer direct action guidance like what to enter, what to review, or what the count represents.
 
 ### Current Verified State
@@ -167,13 +168,13 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Fix exported PDF image rendering so attached photos keep their original aspect ratio instead of being flattened to a fixed height. This should apply to the shared export renderer used by report and incident PDFs, and any future image-bearing export sections.
+- Finish the dark native-control contrast fix. Some browser-native time/date picker buttons are still rendering black against dark cards, so the shared control styling needs custom white icons instead of relying only on browser tinting.
 
 Checklist:
 
-- [x] Re-read project continuity notes and inspect the shared PDF image card styles
-- [x] Replace the fixed image height in the PDF renderer with aspect-ratio-safe sizing
-- [x] Run lint/build and update continuity notes if the rule should persist
+- [x] Re-read project continuity notes and inspect the shared dark native-control CSS
+- [x] Replace browser-colored dark picker icons with custom white calendar/clock/select icons
+- [x] Run lint/build and update continuity notes if this becomes the durable approach
 
 Most likely next tasks:
 
