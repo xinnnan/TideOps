@@ -135,6 +135,7 @@ After finishing any meaningful task:
 - Updated on `2026-04-06`: exported PDFs paginate more cleanly when rendered block-by-block instead of as one long page canvas. Keep section titles attached to their first content block so headings do not get stranded at the bottom of a page.
 - Updated on `2026-04-06`: daily reports now carry a `field_crew_json` list. This is a flat string array that can mix platform users and manually entered external names, and it should appear both in the in-app report feed and in exported PDFs.
 - Updated on `2026-04-06`: client-facing daily report PDFs should not leave attendance context blank just because the author skipped a field. Prefer saved report values first, then fall back to attendance times and at least the author name for field crew when exporting or saving sparse reports.
+- Updated on `2026-04-06`: in the daily report PDF, keep crew information only once. The `Field crew` meta value is sufficient; do not repeat it again as a standalone section unless the document later needs richer crew-specific details.
 - Verified on `2026-04-06`: deleting a safety check-in can fail if a daily report still points at it through `daily_reports.safety_checkin_id`. The safe delete flow is to null out those references first, then remove the safety record.
 - For daily reports and incidents, keep numbered-list entry strictly item-by-item. Do not reintroduce multi-line paste that automatically splits text into multiple numbered items.
 - In report and incident numbered-list entry, keep the add action inside the list input area, near the current items. Do not move the add button back up into the section header row.
@@ -164,15 +165,13 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Make sure exported PDFs do not drop attendance-related context. Recheck safety, daily report, and incident exports, and tighten the daily report flow so arrival/departure times and field-crew names are easier to keep populated and editable.
+- Remove the duplicate crew section in the daily report PDF. Keep only the single `Field crew` value in the PDF meta area and drop the separate `Today's field crew` section.
 
 Checklist:
 
-- [x] Re-read project continuity notes and inspect attendance and PDF export flows
-- [x] Add safer daily report defaults and fallback handling for field crew and attendance times
-- [x] Make the daily report export prefer saved values but fall back to attendance or author info when those fields are empty
-- [x] Recheck safety and incident exports for visible people/context fields and keep editability intact
-- [x] Run lint/build and update continuity notes if the rule should persist
+- [x] Re-read project continuity notes and inspect the daily report PDF structure
+- [x] Remove the extra crew section while preserving the meta-level `Field crew` summary
+- [x] Run lint/build and update continuity notes only if this becomes a durable export rule
 
 Most likely next tasks:
 

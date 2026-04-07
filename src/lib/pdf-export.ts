@@ -850,16 +850,6 @@ export async function exportDailyReportPdf({
     ],
     listSections: [
       {
-        title: getLabel(language, "Today's field crew", "今日出勤人员"),
-        description: getLabel(
-          language,
-          "Personnel confirmed on site during the reporting period, including team members and temporary support.",
-          "本报告时段内确认到场的现场人员，包括平台成员及临时支援人员。",
-        ),
-        items: stringArrayToItems(resolvedFieldCrew),
-        layout: "compact",
-      },
-      {
         title: getLabel(language, "Major tasks", "主要工作"),
         description: getLabel(
           language,
