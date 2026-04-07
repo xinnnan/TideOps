@@ -2725,7 +2725,7 @@ function CreatePlatformUserCard({
             options={[
               {
                 value: "",
-                label: language === "zh" ? "暂不分配项目" : "No project for now",
+                label: language === "zh" ? "不分配项目" : "No project",
               },
               ...projectOptions,
             ]}
@@ -3119,8 +3119,8 @@ function UserManagementWorkspace({
           description={
             selectedSummary
               ? language === "zh"
-                ? "在这里更新当前选中的资料或项目分配。"
-                : "Update the currently selected profile or assignment here."
+                ? "在这里编辑选中的资料或项目分配。"
+                : "Edit the selected profile or assignment here."
               : language === "zh"
                 ? "先从左侧选择一个用户。"
                 : "Choose a user from the directory on the left first."
@@ -3292,14 +3292,14 @@ export default function AdminPage() {
   const overviewTips =
     language === "zh"
       ? [
-          "先维护客户、站点和项目，再安排用户和项目分配。",
-          "如果用户忘记密码，可以在 Users 里打开该用户并发送重置邮件。",
-          "共享项目和客户侧显示公司可以在 Network 里统一核对。",
+          "先补齐客户、站点和项目，再安排用户和项目分配。",
+          "用户忘记密码时，可在 Users 里发送重置邮件。",
+          "共享项目和客户侧显示公司可在 Network 里统一核对。",
         ]
       : [
-          "Keep clients, sites, and projects current first, then move to users and assignments.",
-          "If a user loses access, open that user in Users and send a password reset email.",
-          "Use Network to confirm shared projects and the company shown to the customer.",
+          "Add clients, sites, and projects before moving on to users and assignments.",
+          "Use Users to send a password reset email when someone loses access.",
+          "Use Network to review shared projects and the company shown to the customer.",
         ];
 
   const companyProjectSummaries = useMemo(
@@ -3442,8 +3442,8 @@ export default function AdminPage() {
               value={String(clockedInEngineers)}
               detail={
                 language === "zh"
-                  ? "当前仍在现场中的打卡人数。"
-                  : "People who are still clocked in on site."
+                  ? "已上班打卡且尚未下班的人数。"
+                  : "People who are still clocked in."
               }
               tone="brand"
             />
@@ -3463,7 +3463,7 @@ export default function AdminPage() {
               label={language === "zh" ? "用户" : "Users"}
               value={String(userCount)}
               detail={
-                language === "zh" ? "当前可登录 TideOps 的用户数量。" : "Users currently managed in TideOps."
+                language === "zh" ? "可登录的用户数量。" : "Active user accounts."
               }
               tone="signal"
             />
@@ -3474,14 +3474,14 @@ export default function AdminPage() {
               label={language === "zh" ? "进行中项目" : "Active projects"}
               value={String(activeProjects)}
               detail={
-                language === "zh" ? "当前状态为进行中的项目。" : "Projects currently marked active."
+                language === "zh" ? "状态为进行中的项目数量。" : "Projects with active status."
               }
               tone="brand"
             />
             <MetricCard
               label={language === "zh" ? "站点" : "Sites"}
               value={String(sitesCount)}
-              detail={language === "zh" ? "已配置站点数量。" : "Sites currently configured."}
+              detail={language === "zh" ? "站点总数。" : "Total configured sites."}
               tone="signal"
             />
             <MetricCard
@@ -3504,11 +3504,11 @@ export default function AdminPage() {
             <Card>
               <CardHeader>
                 <CardEyebrow>{language === "zh" ? "使用建议" : "Tips"}</CardEyebrow>
-                <CardTitle>{language === "zh" ? "建议先做这些" : "Start with these steps"}</CardTitle>
+                <CardTitle>{language === "zh" ? "常用操作" : "Common actions"}</CardTitle>
                 <CardDescription>
                   {language === "zh"
-                    ? "按这个顺序维护数据，现场使用会更顺畅。"
-                    : "Keeping these items in order makes daily field use smoother."}
+                    ? "这些操作最常用，也最适合先处理。"
+                    : "These are the actions teams use most often."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -3524,8 +3524,8 @@ export default function AdminPage() {
                 <CardTitle>{language === "zh" ? "公司与项目概览" : "Company and project snapshot"}</CardTitle>
                 <CardDescription>
                   {language === "zh"
-                    ? "快速看每家公司当前关联了多少项目。"
-                    : "Quickly see how many projects are currently linked to each company."}
+                    ? "查看每家公司关联的项目数量。"
+                    : "See how many projects are linked to each company."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -3602,8 +3602,8 @@ export default function AdminPage() {
               <div className="space-y-5">
                 <SectionNote>
                   {language === "zh"
-                    ? "先把公司信息维护好，后面项目、品牌和支持邮箱都会更容易保持一致。"
-                    : "Keep company details up to date first so project ownership, branding, and support contacts stay consistent later."}
+                    ? "先补齐公司信息，再继续维护项目和品牌设置。"
+                    : "Add company details first, then continue with projects and branding."}
                 </SectionNote>
 
                 <div className="grid gap-5 xl:grid-cols-[0.72fr_1.28fr]">

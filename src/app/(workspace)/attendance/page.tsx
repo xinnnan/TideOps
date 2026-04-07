@@ -881,8 +881,8 @@ export default function AttendancePage() {
                 <CardTitle className="text-white">{copy.leave.requestForm}</CardTitle>
                 <CardDescription className="text-white/70">
                   {language === "zh"
-                    ? "现场工程师和运营经理都可以在这里提交请假。"
-                    : "Both service engineers and operations managers can submit leave here."}
+                    ? "填写请假日期和原因后提交。"
+                    : "Enter the leave dates and reason, then submit."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
@@ -891,11 +891,6 @@ export default function AttendancePage() {
                   <div className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3">
                     <p className="text-sm font-semibold text-white">
                       {getLeaveTypeLabel(leaveType, language)}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-white/65">
-                      {language === "zh"
-                        ? "当前默认只开放无薪假。之后如果需要，再配置是否增加 PTO。"
-                        : "Unpaid is the only leave type enabled right now. PTO can be added later if needed."}
                     </p>
                   </div>
                 </div>

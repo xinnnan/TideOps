@@ -85,7 +85,7 @@ export const messages = {
     leave: {
       title: "Leave",
       description:
-        "Keep leave simple: submit, review, approve or reject, then sync approved dates back into attendance.",
+        "Submit leave dates, track status, and review approvals in one place.",
       requestForm: "New leave request",
       requestList: "My requests",
       approvalQueue: "Approval queue",
@@ -240,7 +240,7 @@ export const messages = {
     leave: {
       title: "请假",
       description:
-        "请假流程保持简单：提交、审批、通过或拒绝，审批通过后同步回写到考勤。",
+        "在这里提交请假日期，查看状态和审批结果。",
       requestForm: "新建请假申请",
       requestList: "我的申请",
       approvalQueue: "待审批队列",

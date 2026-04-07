@@ -239,15 +239,19 @@ function createItemCard(
         margin: "0",
         display: "grid",
         gap: "8px",
+        alignContent: "start",
       });
       const image = createElement("img", {
-        width: "100%",
-        height: "220px",
-        objectFit: "cover",
+        width: "auto",
+        maxWidth: "100%",
+        height: "auto",
+        maxHeight: "320px",
+        objectFit: "contain",
         borderRadius: "16px",
         border: "1px solid #dbe3ef",
         display: "block",
         background: "#e2e8f0",
+        justifySelf: "start",
       }) as HTMLImageElement;
       image.src = source;
       image.alt = `${getLabel(language, "Attachment", "附件")} ${photoIndex + 1}`;

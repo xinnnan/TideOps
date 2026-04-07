@@ -498,11 +498,11 @@ export default function ReportPage() {
             <div className="rounded-[24px] border border-white/12 bg-white/8 px-4 py-3 text-sm text-white/75">
               {matchingAttendanceLog?.clockInTime || matchingAttendanceLog?.clockOutTime
                 ? language === "zh"
-                  ? "已从当日考勤带入上下班时间。缺失的时间仍可手动补充，保存后会同步回考勤。"
-                  : "Attendance times for this date were brought in automatically. Fill any missing time manually and saving will sync it back to attendance."
+                  ? "已带入当天已有的上下班时间，缺失部分可直接补充。"
+                  : "Existing arrival and departure times for this date were filled in automatically. Add any missing time here."
                 : language === "zh"
-                  ? "如果这一天还没有完整打卡，可以直接在这里填写到场和离场时间，保存后会自动写回考勤。"
-                  : "If this day does not have a complete attendance log yet, enter the arrival and departure times here and TideOps will sync them back to attendance."}
+                  ? "如果当天还没有完整打卡，也可以直接在这里填写到场和离场时间。"
+                  : "If this day does not have a complete attendance record yet, enter the arrival and departure times here."}
             </div>
 
             <div className="rounded-[24px] border border-white/12 bg-white/8 p-4">

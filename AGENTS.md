@@ -133,6 +133,7 @@ After finishing any meaningful task:
 - Updated on `2026-04-06`: report and incident PDF export now works best through a browser-rendered capture path (`html2canvas` -> paged `jsPDF`) instead of raw `jsPDF` text drawing. This avoids Chinese font breakage and preserves attached images and layout styling in the final PDF.
 - Updated on `2026-04-06`: safety check-in PDF export now uses that same browser-rendered bilingual export path, so safety, report, and incident exports all follow one consistent Chinese-safe rendering approach.
 - Updated on `2026-04-06`: exported PDFs paginate more cleanly when rendered block-by-block instead of as one long page canvas. Keep section titles attached to their first content block so headings do not get stranded at the bottom of a page.
+- Updated on `2026-04-07`: do not give exported PDF photos a fixed display height. Use max-width/max-height constraints with `height: auto` so attached images keep their original aspect ratio in report and incident exports.
 - Updated on `2026-04-06`: daily reports now carry a `field_crew_json` list. This is a flat string array that can mix platform users and manually entered external names, and it should appear both in the in-app report feed and in exported PDFs.
 - Updated on `2026-04-06`: client-facing daily report PDFs should not leave attendance context blank just because the author skipped a field. Prefer saved report values first, then fall back to attendance times and at least the author name for field crew when exporting or saving sparse reports.
 - Updated on `2026-04-06`: in the daily report PDF, keep crew information only once. The `Field crew` meta value is sufficient; do not repeat it again as a standalone section unless the document later needs richer crew-specific details.
@@ -151,6 +152,7 @@ After finishing any meaningful task:
 - Do not put decorative texture overlays such as `noise-panel` on the default shared `Card` component. Large cards and long admin workspaces make those overlays visible as horizontal page bands once the page scrolls.
 - Keep shared shell shadows subtle. Large blur shadows on sticky sidebars or full-width workspace cards can read like background color shifts on long pages.
 - For dark form cards that use native browser date/time/datetime or select controls, apply one shared high-contrast class instead of ad hoc per-page fixes. Native picker indicators and arrows need explicit dark-mode styling or they disappear against translucent dark backgrounds.
+- Keep page copy task-focused. Avoid roadmap wording such as "can be added later", internal process explanations, or setup-style narration in normal workflows. Prefer direct action guidance like what to enter, what to review, or what the count represents.
 
 ### Current Verified State
 
@@ -165,13 +167,13 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Remove the duplicate crew section in the daily report PDF. Keep only the single `Field crew` value in the PDF meta area and drop the separate `Today's field crew` section.
+- Fix exported PDF image rendering so attached photos keep their original aspect ratio instead of being flattened to a fixed height. This should apply to the shared export renderer used by report and incident PDFs, and any future image-bearing export sections.
 
 Checklist:
 
-- [x] Re-read project continuity notes and inspect the daily report PDF structure
-- [x] Remove the extra crew section while preserving the meta-level `Field crew` summary
-- [x] Run lint/build and update continuity notes only if this becomes a durable export rule
+- [x] Re-read project continuity notes and inspect the shared PDF image card styles
+- [x] Replace the fixed image height in the PDF renderer with aspect-ratio-safe sizing
+- [x] Run lint/build and update continuity notes if the rule should persist
 
 Most likely next tasks:
 
