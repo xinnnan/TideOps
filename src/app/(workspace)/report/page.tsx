@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NumberedListComposer } from "@/components/numbered-list-composer";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -18,12 +18,15 @@ import {
   createDraftMediaListItem,
 } from "@/lib/media-items";
 import { exportDailyReportPdf } from "@/lib/pdf-export";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 import type { AttendanceLog, MediaListItem } from "@/lib/types";
 import {
   extractTimeInputValue,
   formatDisplayDate,
   getLocalDateString,
 } from "@/lib/utils";
+
+const FIELD_MEDIA_BUCKET = "field-media";
 
 function getReportDefaults(params: {
   attendanceLogs: AttendanceLog[];
@@ -48,6 +51,89 @@ function dedupeNames(values: string[]) {
 
 function getDefaultFieldCrew(currentUserName?: string) {
   return currentUserName?.trim() ? [currentUserName.trim()] : [];
+}
+
+function ReportPhotoStrip({
+  paths,
+  language,
+}: {
+  paths: string[];
+  language: "en" | "zh";
+}) {
+  const [urls, setUrls] = useState<string[]>([]);
+  const uniquePaths = useMemo(
+    () => Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean))),
+    [paths],
+  );
+  const pathKey = uniquePaths.join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUrls() {
+      setUrls([]);
+
+      if (uniquePaths.length === 0) {
+        return;
+      }
+
+      const supabase = getSupabaseBrowserClient();
+
+      if (!supabase) {
+        return;
+      }
+
+      const { data, error } = await supabase.storage
+        .from(FIELD_MEDIA_BUCKET)
+        .createSignedUrls(uniquePaths, 60 * 30);
+
+      if (cancelled || error) {
+        return;
+      }
+
+      setUrls(
+        (data ?? [])
+          .map((item) => item.signedUrl)
+          .filter((url): url is string => Boolean(url)),
+      );
+    }
+
+    void loadUrls();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathKey, uniquePaths]);
+
+  if (uniquePaths.length === 0) {
+    return null;
+  }
+
+  if (urls.length === 0) {
+    return (
+      <div className="mt-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+        {language === "zh"
+          ? `${uniquePaths.length} 张照片暂时无法预览。`
+          : `${uniquePaths.length} photo${uniquePaths.length > 1 ? "s are" : " is"} not available for preview right now.`}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      {urls.map((url, index) => (
+        <div
+          key={`${url}-${index}`}
+          role="img"
+          aria-label={
+            language === "zh" ? `日报照片 ${index + 1}` : `Report photo ${index + 1}`
+          }
+          className="aspect-[4/3] rounded-2xl border border-slate-200 bg-slate-100 bg-cover bg-center"
+          style={{ backgroundImage: `url(${JSON.stringify(url)})` }}
+        />
+      ))}
+    </div>
+  );
 }
 
 export default function ReportPage() {
@@ -322,6 +408,30 @@ export default function ReportPage() {
 
   function renderItemList(items: MediaListItem[]) {
     return items.filter((item) => item.text.trim().length > 0 || item.attachments.length > 0);
+  }
+
+  function renderReportItemCards(
+    reportId: string,
+    group: string,
+    items: MediaListItem[],
+  ) {
+    return (
+      <div className="mt-2 space-y-3">
+        {items.map((item, index) => (
+          <div
+            key={`${reportId}-${group}-${index}`}
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
+          >
+            <p className="text-sm leading-6 text-slate-700">
+              {index + 1}.{" "}
+              {item.text.trim() ||
+                (language === "zh" ? "仅照片" : "Photo only")}
+            </p>
+            <ReportPhotoStrip paths={item.attachments} language={language} />
+          </div>
+        ))}
+      </div>
+    );
   }
 
   function addCrewName(name: string) {
@@ -869,58 +979,19 @@ export default function ReportPage() {
                     <div className="mt-4 space-y-4 text-sm text-slate-700">
                       <div>
                         <p className="font-medium text-slate-900">{copy.report.majorTasks}</p>
-                        <ul className="mt-2 space-y-1">
-                          {taskItems.map((item, index) => (
-                            <li key={`${report.id}-task-${index}`}>
-                              {`${index + 1}. ${item.text}`}
-                              {item.attachments.length > 0 ? (
-                                <span className="ml-2 text-xs text-slate-500">
-                                  {language === "zh"
-                                    ? `(${item.attachments.length} 张图)`
-                                    : `(${item.attachments.length} photo${item.attachments.length > 1 ? "s" : ""})`}
-                                </span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
+                        {renderReportItemCards(report.id, "task", taskItems)}
                       </div>
 
                       {blockerItems.length > 0 ? (
                         <div>
                           <p className="font-medium text-slate-900">{copy.report.blockers}</p>
-                          <ul className="mt-2 space-y-1">
-                            {blockerItems.map((item, index) => (
-                              <li key={`${report.id}-blocker-${index}`}>
-                                {`${index + 1}. ${item.text}`}
-                                {item.attachments.length > 0 ? (
-                                  <span className="ml-2 text-xs text-slate-500">
-                                    {language === "zh"
-                                      ? `(${item.attachments.length} 张图)`
-                                      : `(${item.attachments.length} photo${item.attachments.length > 1 ? "s" : ""})`}
-                                  </span>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ul>
+                          {renderReportItemCards(report.id, "blocker", blockerItems)}
                         </div>
                       ) : null}
 
                       <div>
                         <p className="font-medium text-slate-900">{copy.report.nextDayPlan}</p>
-                        <ul className="mt-2 space-y-1">
-                          {nextDayItems.map((item, index) => (
-                            <li key={`${report.id}-next-${index}`}>
-                              {`${index + 1}. ${item.text}`}
-                              {item.attachments.length > 0 ? (
-                                <span className="ml-2 text-xs text-slate-500">
-                                  {language === "zh"
-                                    ? `(${item.attachments.length} 张图)`
-                                    : `(${item.attachments.length} photo${item.attachments.length > 1 ? "s" : ""})`}
-                                </span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
+                        {renderReportItemCards(report.id, "next", nextDayItems)}
                       </div>
                     </div>
 

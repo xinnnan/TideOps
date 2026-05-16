@@ -141,6 +141,8 @@ After finishing any meaningful task:
 - For daily reports and incidents, keep numbered-list entry strictly item-by-item. Do not reintroduce multi-line paste that automatically splits text into multiple numbered items.
 - In report and incident numbered-list entry, keep the add action inside the list input area, near the current items. Do not move the add button back up into the section header row.
 - Updated on `2026-04-06`: if an edit flow can keep previously uploaded images, draft state must store existing attachment paths separately from new `File` uploads. On save, merge the stored paths back into the item JSON instead of treating all attachments as fresh uploads.
+- Updated on `2026-05-16`: the shared media draft save helper must treat `existingAttachments` as content when deciding whether an item is empty. Otherwise editing a photo-only report/incident item can silently drop the stored image paths.
+- Updated on `2026-05-16`: daily report and incident item-level JSON remains the canonical media structure, but keep `attachments_json` synchronized as an aggregate compatibility list for previews, cleanup, and fallback paths.
 - Updated on `2026-04-06`: helper functions that sync related records during manager edits must accept the target record owner explicitly. Do not infer the owner from the current session user, or manager edits will write attendance updates onto the manager instead of the original engineer.
 - Updated on `2026-04-06`: allowing multiple safety check-ins or daily reports on the same day requires dropping the old per-user per-project per-date unique constraints and relying on dedicated `record_number` sequences. Once that exists, list loading should sort by `created_at desc`, not only by `date`, so same-day entries stay in the right order.
 - In report and incident feeds, service engineers should only see and search their own records. Operations managers can see all records and should get filter controls such as reporter, project, site, and date.
@@ -154,13 +156,19 @@ After finishing any meaningful task:
 - For dark form cards that use native browser date/time/datetime or select controls, apply one shared high-contrast class instead of ad hoc per-page fixes. Native picker indicators and arrows need explicit dark-mode styling or they disappear against translucent dark backgrounds.
 - Updated on `2026-04-07`: browser tinting alone is not enough for dark native controls. The reliable fix is to hide the browser-colored picker indicator and draw a custom white calendar/clock/chevron background icon while keeping the native control interactive.
 - Keep page copy task-focused. Avoid roadmap wording such as "can be added later", internal process explanations, or setup-style narration in normal workflows. Prefer direct action guidance like what to enter, what to review, or what the count represents.
+- Updated on `2026-05-16`: Admin Overview now includes an activity review calendar backed by loaded workspace data. Until a real shift/schedule model exists, "missing attendance" means weekdays through today with no attendance log, not a definitive absence finding.
 
 ### Current Verified State
 
 - `npm run lint` passed on `2026-04-06`
 - `npm run build` passed on `2026-04-06`
+- `npm run lint` passed on `2026-05-16`
+- `npm run build` passed on `2026-05-16`
+- `git diff --check` passed on `2026-05-16`
 - Local routes `/login` and `/today` returned HTTP `200` on `2026-04-05`
 - Old dev servers on ports `3000` and `3001` were stopped and a fresh `npm run dev` instance was restarted on port `3000` on `2026-04-05`
+- Fresh `npm run dev` started on port `3000` on `2026-05-16`; browser smoke reached the unauthenticated/unconfigured sign-in screen, so Admin internals were verified by lint/build rather than live logged-in data.
+- Verified on `2026-05-16`: this checkout currently has no `.env.local`, so local browser QA cannot reach authenticated Supabase-backed workspace screens until the public Supabase env values are restored locally.
 - Verified on `2026-04-06`: `vercel` CLI is installed as `50.9.5`, but `vercel whoami` currently returns `No existing credentials found`, so deployment is blocked until the machine is authenticated to Vercel.
 - Verified on `2026-04-06`: local `.env.local` already contains non-empty values for `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, so dashboard-based Vercel deployment can proceed once those same two values are added in Vercel Project Settings.
 
@@ -168,22 +176,25 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Finish the dark native-control contrast fix. Some browser-native time/date picker buttons are still rendering black against dark cards, so the shared control styling needs custom white icons instead of relying only on browser tinting.
+- Commit the completed report-photo and Admin Overview activity-review changes, then push the current branch to the git remote.
 
 Checklist:
 
-- [x] Re-read project continuity notes and inspect the shared dark native-control CSS
-- [x] Replace browser-colored dark picker icons with custom white calendar/clock/select icons
-- [x] Run lint/build and update continuity notes if this becomes the durable approach
+- [x] Re-read project continuity notes and refresh this scratchpad for the commit/push task
+- [x] Review git status and current branch/remote
+- [x] Stage the intended changed files
+- [x] Create a clear commit for the completed work
+- [x] Push the current branch to the configured remote
+- [x] Re-read AGENTS.md and leave the scratchpad clean with the pushed commit details
 
 Most likely next tasks:
 
 - [ ] If more records later need "people on site" data, add an explicit shared participant model instead of inferring everything from author names
-- [ ] If more dark cards get date/time/select controls later, reuse `dark-native-control` instead of copying browser-specific pseudo-element styles
-- [ ] After this feature lands, run the new daily-report attendee migration in Supabase before testing in Vercel
+- [ ] If attendance gaps need project-specific expected workdays, add a shift/schedule model instead of treating weekdays without logs as missing.
+- [ ] If report photo previews show "not available" for managers, re-check the `field-media` operations-manager read policy and stored object paths.
+- [ ] Restore local `.env.local` public Supabase values before live QA of authenticated Admin/report screens.
 - [ ] If field crew later needs richer structure such as lead/technician roles, store that in a separate JSON object instead of overloading a flat string list
-- [ ] If exported PDFs later need logos or client branding, add that as an optional document theme layer without reintroducing app-product badges in the header
-- [ ] If PDF output grows again, keep pagination block-based instead of falling back to one giant canvas slice
+- [ ] If Admin Overview grows again, consider splitting the activity review into a dedicated operations review route while preserving the overview entry point.
 
 Scratchpad rules:
 

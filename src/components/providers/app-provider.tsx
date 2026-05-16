@@ -476,7 +476,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const item = items[index];
       const text = item.text.trim();
 
-      if (!text && item.attachments.length === 0) {
+      if (
+        !text &&
+        item.existingAttachments.length === 0 &&
+        item.attachments.length === 0
+      ) {
         continue;
       }
 
@@ -1955,6 +1959,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Add at least one next-day plan item before submitting.",
       };
     }
+    const mediaPaths = collectMediaPaths([
+      ...majorTaskItems,
+      ...blockerItems,
+      ...nextDayPlanItems,
+    ]);
     const normalizedFieldCrew = Array.from(
       new Set(
         (
@@ -1999,6 +2008,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         next_day_plan: nextDayPlanItems.map((item) => item.text).join("\n"),
         blockers: blockerItems.map((item) => item.text).join("\n") || null,
         field_crew_json: normalizedFieldCrew,
+        attachments_json: mediaPaths,
         major_tasks_items_json: majorTaskItems,
         blocker_items_json: blockerItems,
         next_day_plan_items_json: nextDayPlanItems,
@@ -2093,6 +2103,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Keep at least one major task and one next-day plan item.",
       };
     }
+    const mediaPaths = collectMediaPaths([
+      ...majorTaskItems,
+      ...blockerItems,
+      ...nextDayPlanItems,
+    ]);
     const defaultCrewName =
       workspace.profiles.find((profile) => profile.id === target.authorUserId)?.fullName ??
       currentUser.fullName;
@@ -2134,6 +2149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         next_day_plan: nextDayPlanItems.map((item) => item.text).join("\n"),
         blockers: blockerItems.map((item) => item.text).join("\n") || null,
         field_crew_json: normalizedFieldCrew,
+        attachments_json: mediaPaths,
         major_tasks_items_json: majorTaskItems,
         blocker_items_json: blockerItems,
         next_day_plan_items_json: nextDayPlanItems,
@@ -2261,6 +2277,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Add at least one immediate action before submitting.",
       };
     }
+    const mediaPaths = collectMediaPaths([
+      ...factItems,
+      ...immediateActionItems,
+      ...followUpItems,
+    ]);
     const { data, error } = await supabase
       .from("incidents")
       .insert({
@@ -2276,6 +2297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         immediate_action: immediateActionItems.map((item) => item.text).join("\n"),
         escalation_required: payload.escalationRequired,
         corrective_action: followUpItems.map((item) => item.text).join("\n") || null,
+        attachments_json: mediaPaths,
         fact_items_json: factItems,
         immediate_action_items_json: immediateActionItems,
         follow_up_items_json: followUpItems,
@@ -2349,6 +2371,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : "Keep at least one fact item and one immediate action item.",
       };
     }
+    const mediaPaths = collectMediaPaths([
+      ...factItems,
+      ...immediateActionItems,
+      ...followUpItems,
+    ]);
 
     const { error } = await supabase
       .from("incidents")
@@ -2364,6 +2391,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         immediate_action: immediateActionItems.map((item) => item.text).join("\n"),
         escalation_required: payload.escalationRequired,
         corrective_action: followUpItems.map((item) => item.text).join("\n") || null,
+        attachments_json: mediaPaths,
         fact_items_json: factItems,
         immediate_action_items_json: immediateActionItems,
         follow_up_items_json: followUpItems,

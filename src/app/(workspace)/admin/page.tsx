@@ -17,15 +17,23 @@ import {
 import { TabBar } from "@/components/ui/tab-bar";
 import { siteTimezoneOptions } from "@/lib/form-options";
 import type {
+  AttendanceLog,
   Client,
   Company,
+  DailyReport,
   Profile,
   Project,
   ProjectAssignment,
   ProjectCompanyShare,
   Site,
 } from "@/lib/types";
-import { cn, formatDisplayDateTime, getLocalDateString } from "@/lib/utils";
+import {
+  cn,
+  formatDisplayDate,
+  formatDisplayDateTime,
+  formatDisplayTime,
+  getLocalDateString,
+} from "@/lib/utils";
 
 type AdminTab =
   | "account"
@@ -38,6 +46,7 @@ type AdminTab =
 type StructureView = "organization" | "delivery";
 type DeliveryWorkspaceView = "client" | "site" | "project";
 type UserWorkspaceView = "profile" | "new_assignment" | "assignment";
+type HistoryRecordKind = "all" | "attendance" | "reports";
 
 interface SelectOption {
   label: string;
@@ -298,6 +307,68 @@ function getProjectContext(
     clientName,
     optionLabel: `${clientName} / ${siteName} / ${project.name}`,
   };
+}
+
+function getMonthInputValue(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function buildMonthCalendarCells(monthValue: string) {
+  const [year, month] = monthValue.split("-").map(Number);
+
+  if (!year || !month) {
+    return [] as Array<string | null>;
+  }
+
+  const firstDay = new Date(year, month - 1, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells: Array<string | null> = Array.from(
+    { length: firstDay.getDay() },
+    () => null,
+  );
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  return cells;
+}
+
+function isWeekdayDate(dateValue: string) {
+  const day = new Date(`${dateValue}T00:00:00`).getDay();
+  return day !== 0 && day !== 6;
+}
+
+function getAttendanceLabel(status: string, language: "en" | "zh") {
+  const labels = {
+    present: { en: "Present", zh: "正常" },
+    partial: { en: "Clocked in", zh: "已上班" },
+    missing_clock_out: { en: "Missing out", zh: "缺下班卡" },
+    missing_clock_in: { en: "Missing in", zh: "缺上班卡" },
+    leave: { en: "Leave", zh: "请假" },
+  } as const;
+
+  return labels[status as keyof typeof labels]?.[language] ?? status;
+}
+
+function getAttendancePillClass(status: string) {
+  if (status === "present") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  }
+
+  if (status === "leave") {
+    return "bg-blue-50 text-blue-700 ring-blue-200";
+  }
+
+  if (status === "partial") {
+    return "bg-amber-50 text-amber-700 ring-amber-200";
+  }
+
+  return "bg-rose-50 text-rose-700 ring-rose-200";
 }
 
 function HierarchyNodeShell({
@@ -3204,6 +3275,442 @@ function UserManagementWorkspace({
   );
 }
 
+function OverviewActivityReview({
+  attendanceLogs,
+  dailyReports,
+  profiles,
+  projects,
+  clients,
+  sites,
+  language,
+}: {
+  attendanceLogs: AttendanceLog[];
+  dailyReports: DailyReport[];
+  profiles: Profile[];
+  projects: Project[];
+  clients: Client[];
+  sites: Site[];
+  language: "en" | "zh";
+}) {
+  const [calendarMonth, setCalendarMonth] = useState(getMonthInputValue());
+  const [selectedCalendarUserId, setSelectedCalendarUserId] = useState("");
+  const [selectedCalendarProjectId, setSelectedCalendarProjectId] = useState("");
+  const [historyKind, setHistoryKind] = useState<HistoryRecordKind>("all");
+  const [historyProjectId, setHistoryProjectId] = useState("");
+  const [historyDate, setHistoryDate] = useState(getLocalDateString());
+  const today = getLocalDateString();
+
+  const activeProfiles = useMemo(
+    () =>
+      profiles
+        .filter((profile) => profile.status !== "inactive")
+        .sort((left, right) => left.fullName.localeCompare(right.fullName)),
+    [profiles],
+  );
+  const calendarUserId = selectedCalendarUserId || activeProfiles[0]?.id || "";
+  const calendarProjectId = selectedCalendarProjectId || projects[0]?.id || "";
+  const selectedUser = activeProfiles.find((profile) => profile.id === calendarUserId);
+  const selectedProject = projects.find((project) => project.id === calendarProjectId);
+  const calendarCells = useMemo(
+    () => buildMonthCalendarCells(calendarMonth),
+    [calendarMonth],
+  );
+  const userLogsByDate = useMemo(
+    () =>
+      new Map(
+        attendanceLogs
+          .filter((log) => log.userId === calendarUserId)
+          .map((log) => [log.date, log]),
+      ),
+    [attendanceLogs, calendarUserId],
+  );
+  const reportsByDate = useMemo(() => {
+    const grouped = new Map<string, DailyReport[]>();
+
+    dailyReports
+      .filter((report) => report.projectId === calendarProjectId)
+      .forEach((report) => {
+        grouped.set(report.date, [...(grouped.get(report.date) ?? []), report]);
+      });
+
+    return grouped;
+  }, [calendarProjectId, dailyReports]);
+  const monthDates = calendarCells.filter((date): date is string => Boolean(date));
+  const monthUserLogs = monthDates.filter((date) => userLogsByDate.has(date)).length;
+  const missingWeekdays = monthDates.filter(
+    (date) => date <= today && isWeekdayDate(date) && !userLogsByDate.has(date),
+  );
+  const projectReportDays = monthDates.filter(
+    (date) => (reportsByDate.get(date)?.length ?? 0) > 0,
+  ).length;
+
+  const historyAttendance = useMemo(
+    () =>
+      attendanceLogs
+        .filter((log) => (historyProjectId ? log.projectId === historyProjectId : true))
+        .filter((log) => (historyDate ? log.date === historyDate : true))
+        .sort((left, right) =>
+          `${left.date}-${left.clockInTime ?? ""}` < `${right.date}-${right.clockInTime ?? ""}`
+            ? 1
+            : -1,
+        ),
+    [attendanceLogs, historyDate, historyProjectId],
+  );
+  const historyReports = useMemo(
+    () =>
+      dailyReports
+        .filter((report) => (historyProjectId ? report.projectId === historyProjectId : true))
+        .filter((report) => (historyDate ? report.date === historyDate : true))
+        .sort((left, right) =>
+          `${left.date}-${left.recordNumber}` < `${right.date}-${right.recordNumber}` ? 1 : -1,
+        ),
+    [dailyReports, historyDate, historyProjectId],
+  );
+  const showAttendanceHistory = historyKind === "all" || historyKind === "attendance";
+  const showReportHistory = historyKind === "all" || historyKind === "reports";
+  const weekdayLabels =
+    language === "zh"
+      ? ["日", "一", "二", "三", "四", "五", "六"]
+      : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  return (
+    <section className="grid gap-4 xl:grid-cols-[1.16fr_0.84fr]">
+      <Card>
+        <CardHeader>
+          <CardEyebrow>
+            {language === "zh" ? "日历复核" : "Calendar review"}
+          </CardEyebrow>
+          <CardTitle>
+            {language === "zh" ? "考勤缺口与项目日报" : "Attendance gaps and project reports"}
+          </CardTitle>
+          <CardDescription>
+            {language === "zh"
+              ? "选择工程师和项目，在同一个月历里查看考勤是否缺失，以及项目哪些天已有日报。"
+              : "Choose an engineer and project to review missing attendance logs and project report days in one month view."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <LabeledSelect
+              label={language === "zh" ? "工程师 / 用户" : "Engineer / user"}
+              value={calendarUserId}
+              onChange={setSelectedCalendarUserId}
+              options={activeProfiles.map((profile) => ({
+                label: profile.fullName,
+                value: profile.id,
+              }))}
+            />
+            <LabeledSelect
+              label={language === "zh" ? "项目日报" : "Project reports"}
+              value={calendarProjectId}
+              onChange={setSelectedCalendarProjectId}
+              options={projects.map((project) => ({
+                label: getProjectContext(project.id, projects, clients, sites).optionLabel,
+                value: project.id,
+              }))}
+            />
+            <LabeledInput
+              label={language === "zh" ? "月份" : "Month"}
+              value={calendarMonth}
+              onChange={setCalendarMonth}
+              type="month"
+            />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                {language === "zh" ? "考勤记录" : "Attendance logs"}
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950">{monthUserLogs}</p>
+              <p className="mt-1 text-sm text-slate-500">{selectedUser?.fullName ?? "--"}</p>
+            </div>
+            <div className="rounded-[24px] border border-rose-100 bg-rose-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-rose-500">
+                {language === "zh" ? "缺失工作日" : "Missing weekdays"}
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-rose-700">
+                {missingWeekdays.length}
+              </p>
+              <p className="mt-1 text-sm text-rose-600">
+                {language === "zh" ? "截至今天无考勤记录。" : "Weekdays through today with no log."}
+              </p>
+            </div>
+            <div className="rounded-[24px] border border-blue-100 bg-blue-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-500">
+                {language === "zh" ? "日报天数" : "Report days"}
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-blue-700">{projectReportDays}</p>
+              <p className="mt-1 text-sm text-blue-600">{selectedProject?.name ?? "--"}</p>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-xs font-semibold text-slate-500">
+              {weekdayLabels.map((label) => (
+                <div key={label} className="px-2 py-2">
+                  {label}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {calendarCells.map((date, index) => {
+                if (!date) {
+                  return (
+                    <div
+                      key={`empty-${index}`}
+                      className="min-h-[118px] border-b border-r border-slate-100 bg-slate-50/60"
+                    />
+                  );
+                }
+
+                const dayNumber = Number(date.slice(-2));
+                const attendance = userLogsByDate.get(date);
+                const reports = reportsByDate.get(date) ?? [];
+                const isFuture = date > today;
+                const isMissing = !isFuture && isWeekdayDate(date) && !attendance;
+
+                return (
+                  <div
+                    key={date}
+                    className={cn(
+                      "min-h-[118px] border-b border-r border-slate-100 p-2",
+                      isMissing ? "bg-rose-50/70" : "bg-white",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-semibold text-slate-900">{dayNumber}</span>
+                      {reports.length > 0 ? (
+                        <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          {reports.length}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {attendance ? (
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ring-1",
+                            getAttendancePillClass(attendance.attendanceStatus),
+                          )}
+                        >
+                          {getAttendanceLabel(attendance.attendanceStatus, language)}
+                        </span>
+                      ) : (
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ring-1",
+                            isMissing
+                              ? "bg-rose-100 text-rose-700 ring-rose-200"
+                              : "bg-slate-100 text-slate-500 ring-slate-200",
+                          )}
+                        >
+                          {isFuture
+                            ? language === "zh"
+                              ? "未到"
+                              : "Upcoming"
+                            : isMissing
+                              ? language === "zh"
+                                ? "缺考勤"
+                                : "Missing"
+                              : language === "zh"
+                                ? "无记录"
+                                : "No log"}
+                        </span>
+                      )}
+                      {reports.length > 0 ? (
+                        <p className="text-[11px] font-medium leading-4 text-blue-700">
+                          {language === "zh"
+                            ? `${reports.length} 份日报`
+                            : `${reports.length} report${reports.length > 1 ? "s" : ""}`}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardEyebrow>
+            {language === "zh" ? "历史查询" : "History search"}
+          </CardEyebrow>
+          <CardTitle>
+            {language === "zh" ? "按项目和日期查记录" : "Find records by project and day"}
+          </CardTitle>
+          <CardDescription>
+            {language === "zh"
+              ? "筛选某个项目和某一天，查看日报或考勤历史。"
+              : "Filter to one project and day, then review attendance or report history."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3">
+            <LabeledSelect
+              label={language === "zh" ? "记录类型" : "Record type"}
+              value={historyKind}
+              onChange={(value) => setHistoryKind(value as HistoryRecordKind)}
+              options={[
+                { value: "all", label: language === "zh" ? "全部" : "All" },
+                { value: "attendance", label: language === "zh" ? "考勤" : "Attendance" },
+                { value: "reports", label: language === "zh" ? "日报" : "Reports" },
+              ]}
+            />
+            <LabeledSelect
+              label={language === "zh" ? "项目" : "Project"}
+              value={historyProjectId}
+              onChange={setHistoryProjectId}
+              options={[
+                { value: "", label: language === "zh" ? "全部项目" : "All projects" },
+                ...projects.map((project) => ({
+                  label: getProjectContext(project.id, projects, clients, sites).optionLabel,
+                  value: project.id,
+                })),
+              ]}
+            />
+            <LabeledInput
+              label={language === "zh" ? "日期" : "Date"}
+              value={historyDate}
+              onChange={setHistoryDate}
+              type="date"
+            />
+          </div>
+
+          {showAttendanceHistory ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  {language === "zh" ? "考勤记录" : "Attendance"}
+                </p>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  {historyAttendance.length}
+                </span>
+              </div>
+              {historyAttendance.length === 0 ? (
+                <EmptyState
+                  message={
+                    language === "zh"
+                      ? "没有匹配的考勤记录。"
+                      : "No attendance log matches the current search."
+                  }
+                />
+              ) : (
+                historyAttendance.map((log) => (
+                  <div
+                    key={log.id}
+                    className="rounded-[24px] border border-slate-200 bg-white p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-slate-900">
+                          {profiles.find((profile) => profile.id === log.userId)?.fullName ??
+                            log.userId}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {formatDisplayDate(log.date, language)} ·{" "}
+                          {projects.find((project) => project.id === log.projectId)?.name ??
+                            "--"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {formatDisplayTime(log.clockInTime, language)} -{" "}
+                          {formatDisplayTime(log.clockOutTime, language)}
+                        </p>
+                      </div>
+                      <Badge
+                        tone={
+                          log.attendanceStatus === "present"
+                            ? "success"
+                            : log.attendanceStatus === "leave"
+                              ? "signal"
+                              : log.attendanceStatus === "partial"
+                                ? "accent"
+                                : "danger"
+                        }
+                      >
+                        {getAttendanceLabel(log.attendanceStatus, language)}
+                      </Badge>
+                    </div>
+                    {log.note ? (
+                      <p className="mt-3 text-sm leading-6 text-slate-600">{log.note}</p>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          ) : null}
+
+          {showReportHistory ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  {language === "zh" ? "日报记录" : "Reports"}
+                </p>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  {historyReports.length}
+                </span>
+              </div>
+              {historyReports.length === 0 ? (
+                <EmptyState
+                  message={
+                    language === "zh"
+                      ? "没有匹配的日报记录。"
+                      : "No daily report matches the current search."
+                  }
+                />
+              ) : (
+                historyReports.map((report) => {
+                  const projectName =
+                    projects.find((project) => project.id === report.projectId)?.name ?? "--";
+                  const authorName =
+                    profiles.find((profile) => profile.id === report.authorUserId)?.fullName ??
+                    report.authorUserId;
+                  const photoCount = [
+                    ...report.majorTaskItems,
+                    ...report.blockerItems,
+                    ...report.nextDayPlanItems,
+                  ].reduce((total, item) => total + item.attachments.length, 0);
+
+                  return (
+                    <div
+                      key={report.id}
+                      className="rounded-[24px] border border-slate-200 bg-white p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-900">
+                            #{report.recordNumber} · {projectName}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {formatDisplayDate(report.date, language)} · {authorName}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {language === "zh" ? "条目" : "Items"}:{" "}
+                            {report.majorTaskItems.length +
+                              report.blockerItems.length +
+                              report.nextDayPlanItems.length}{" "}
+                            · {language === "zh" ? "照片" : "Photos"}: {photoCount}
+                          </p>
+                        </div>
+                        <Badge tone={report.status === "submitted" ? "accent" : "success"}>
+                          {report.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -3499,6 +4006,16 @@ export default function AdminPage() {
               tone="danger"
             />
           </section>
+
+          <OverviewActivityReview
+            attendanceLogs={attendanceLogs}
+            dailyReports={dailyReports}
+            profiles={profiles}
+            projects={projects}
+            clients={clients}
+            sites={sites}
+            language={language}
+          />
 
           <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
             <Card>
