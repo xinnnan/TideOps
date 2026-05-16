@@ -62,7 +62,7 @@ After finishing any meaningful task:
 - Verified on `2026-04-06`: if operations managers need to export report or incident PDFs with images uploaded by other users, `storage.objects` also needs an operations-manager select policy for the `field-media` bucket. Owner-only read policies are not enough for manager exports.
 - RLS helper functions that read from RLS-protected tables such as `profiles`, `projects`, or `project_assignments` must be created as `security definer` with `set search_path = public`. Otherwise Supabase can hit recursive policy evaluation and return `500` for basic `select` queries.
 - Keep comment lines in `.env.local` commented. A plain text line without `#` becomes an unparsed env line and should be cleaned up.
-- On `2026-04-06`, `git push origin main` to `https://github.com/xinnnan/TideOps.git` succeeded again from this machine after the earlier GitHub access issue was resolved externally. If push failures return later, re-check which GitHub account the machine is using before changing repo config.
+- On `2026-05-16`, `git push origin main` over the HTTPS remote failed with `could not read Username for 'https://github.com': Device not configured`, but SSH auth for `git@github.com` worked as `xinnnan`. Use `git push git@github.com:xinnnan/TideOps.git main` if the HTTPS remote cannot prompt for credentials.
 
 ### Auth And Onboarding
 
@@ -169,6 +169,7 @@ After finishing any meaningful task:
 - Old dev servers on ports `3000` and `3001` were stopped and a fresh `npm run dev` instance was restarted on port `3000` on `2026-04-05`
 - Fresh `npm run dev` started on port `3000` on `2026-05-16`; browser smoke reached the unauthenticated/unconfigured sign-in screen, so Admin internals were verified by lint/build rather than live logged-in data.
 - Verified on `2026-05-16`: this checkout currently has no `.env.local`, so local browser QA cannot reach authenticated Supabase-backed workspace screens until the public Supabase env values are restored locally.
+- Verified on `2026-05-16`: commit `47c63d0` with the report-photo/Admin Overview changes was pushed to `main` using the SSH GitHub remote.
 - Verified on `2026-04-06`: `vercel` CLI is installed as `50.9.5`, but `vercel whoami` currently returns `No existing credentials found`, so deployment is blocked until the machine is authenticated to Vercel.
 - Verified on `2026-04-06`: local `.env.local` already contains non-empty values for `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, so dashboard-based Vercel deployment can proceed once those same two values are added in Vercel Project Settings.
 
@@ -176,7 +177,7 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Commit the completed report-photo and Admin Overview activity-review changes, then push the current branch to the git remote.
+- Commit and push the completed report-photo and Admin Overview activity-review changes to `main`.
 
 Checklist:
 
@@ -184,7 +185,7 @@ Checklist:
 - [x] Review git status and current branch/remote
 - [x] Stage the intended changed files
 - [x] Create a clear commit for the completed work
-- [x] Push the current branch to the configured remote
+- [x] Push the current branch to GitHub over SSH after HTTPS auth failed locally
 - [x] Re-read AGENTS.md and leave the scratchpad clean with the pushed commit details
 
 Most likely next tasks:
