@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { NumberedListComposer } from "@/components/numbered-list-composer";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -18,15 +18,12 @@ import {
   createDraftMediaListItem,
 } from "@/lib/media-items";
 import { exportDailyReportPdf } from "@/lib/pdf-export";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
 import type { AttendanceLog, MediaListItem } from "@/lib/types";
 import {
   extractTimeInputValue,
   formatDisplayDate,
   getLocalDateString,
 } from "@/lib/utils";
-
-const FIELD_MEDIA_BUCKET = "field-media";
 
 function getReportDefaults(params: {
   attendanceLogs: AttendanceLog[];
@@ -51,89 +48,6 @@ function dedupeNames(values: string[]) {
 
 function getDefaultFieldCrew(currentUserName?: string) {
   return currentUserName?.trim() ? [currentUserName.trim()] : [];
-}
-
-function ReportPhotoStrip({
-  paths,
-  language,
-}: {
-  paths: string[];
-  language: "en" | "zh";
-}) {
-  const [urls, setUrls] = useState<string[]>([]);
-  const uniquePaths = useMemo(
-    () => Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean))),
-    [paths],
-  );
-  const pathKey = uniquePaths.join("|");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadUrls() {
-      setUrls([]);
-
-      if (uniquePaths.length === 0) {
-        return;
-      }
-
-      const supabase = getSupabaseBrowserClient();
-
-      if (!supabase) {
-        return;
-      }
-
-      const { data, error } = await supabase.storage
-        .from(FIELD_MEDIA_BUCKET)
-        .createSignedUrls(uniquePaths, 60 * 30);
-
-      if (cancelled || error) {
-        return;
-      }
-
-      setUrls(
-        (data ?? [])
-          .map((item) => item.signedUrl)
-          .filter((url): url is string => Boolean(url)),
-      );
-    }
-
-    void loadUrls();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pathKey, uniquePaths]);
-
-  if (uniquePaths.length === 0) {
-    return null;
-  }
-
-  if (urls.length === 0) {
-    return (
-      <div className="mt-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-        {language === "zh"
-          ? `${uniquePaths.length} 张照片暂时无法预览。`
-          : `${uniquePaths.length} photo${uniquePaths.length > 1 ? "s are" : " is"} not available for preview right now.`}
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-      {urls.map((url, index) => (
-        <div
-          key={`${url}-${index}`}
-          role="img"
-          aria-label={
-            language === "zh" ? `日报照片 ${index + 1}` : `Report photo ${index + 1}`
-          }
-          className="aspect-[4/3] rounded-2xl border border-slate-200 bg-slate-100 bg-cover bg-center"
-          style={{ backgroundImage: `url(${JSON.stringify(url)})` }}
-        />
-      ))}
-    </div>
-  );
 }
 
 export default function ReportPage() {
@@ -410,30 +324,6 @@ export default function ReportPage() {
     return items.filter((item) => item.text.trim().length > 0 || item.attachments.length > 0);
   }
 
-  function renderReportItemCards(
-    reportId: string,
-    group: string,
-    items: MediaListItem[],
-  ) {
-    return (
-      <div className="mt-2 space-y-3">
-        {items.map((item, index) => (
-          <div
-            key={`${reportId}-${group}-${index}`}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
-          >
-            <p className="text-sm leading-6 text-slate-700">
-              {index + 1}.{" "}
-              {item.text.trim() ||
-                (language === "zh" ? "仅照片" : "Photo only")}
-            </p>
-            <ReportPhotoStrip paths={item.attachments} language={language} />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   function addCrewName(name: string) {
     const normalized = name.trim();
 
@@ -483,7 +373,7 @@ export default function ReportPage() {
         log.date === report.date,
     );
 
-    await exportDailyReportPdf({
+    const exportResult = await exportDailyReportPdf({
       report,
       projectName,
       authorName,
@@ -493,6 +383,26 @@ export default function ReportPage() {
         report.fieldCrew.length > 0 ? report.fieldCrew : getDefaultFieldCrew(authorName),
       language,
     });
+
+    if (exportResult.storedPathCount === 0) {
+      setFeedback(
+        language === "zh"
+          ? "PDF 已导出，但这条日报没有保存任何照片路径；请检查日报记录里的 item JSON / attachments_json。"
+          : "PDF exported, but this report has no saved photo paths. Check the report item JSON / attachments_json data.",
+      );
+      return;
+    }
+
+    if (exportResult.failedPaths.length > 0) {
+      setFeedback(
+        language === "zh"
+          ? `PDF 已导出，但有 ${exportResult.failedPaths.length} 张照片无法从 Supabase Storage 下载；请检查 field-media 读取策略或对象路径。`
+          : `PDF exported, but ${exportResult.failedPaths.length} photo(s) could not be downloaded from Supabase Storage. Check field-media read policies or object paths.`,
+      );
+      return;
+    }
+
+    setFeedback(language === "zh" ? "PDF 已导出，照片已写入文件。" : "PDF exported with photos.");
   }
 
   async function handleDelete(reportId: string) {
@@ -979,19 +889,58 @@ export default function ReportPage() {
                     <div className="mt-4 space-y-4 text-sm text-slate-700">
                       <div>
                         <p className="font-medium text-slate-900">{copy.report.majorTasks}</p>
-                        {renderReportItemCards(report.id, "task", taskItems)}
+                        <ul className="mt-2 space-y-1">
+                          {taskItems.map((item, index) => (
+                            <li key={`${report.id}-task-${index}`}>
+                              {`${index + 1}. ${item.text || (language === "zh" ? "仅照片" : "Photo only")}`}
+                              {item.attachments.length > 0 ? (
+                                <span className="ml-2 text-xs text-slate-500">
+                                  {language === "zh"
+                                    ? `(${item.attachments.length} 张图)`
+                                    : `(${item.attachments.length} photo${item.attachments.length > 1 ? "s" : ""})`}
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
 
                       {blockerItems.length > 0 ? (
                         <div>
                           <p className="font-medium text-slate-900">{copy.report.blockers}</p>
-                          {renderReportItemCards(report.id, "blocker", blockerItems)}
+                          <ul className="mt-2 space-y-1">
+                            {blockerItems.map((item, index) => (
+                              <li key={`${report.id}-blocker-${index}`}>
+                                {`${index + 1}. ${item.text || (language === "zh" ? "仅照片" : "Photo only")}`}
+                                {item.attachments.length > 0 ? (
+                                  <span className="ml-2 text-xs text-slate-500">
+                                    {language === "zh"
+                                      ? `(${item.attachments.length} 张图)`
+                                      : `(${item.attachments.length} photo${item.attachments.length > 1 ? "s" : ""})`}
+                                  </span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       ) : null}
 
                       <div>
                         <p className="font-medium text-slate-900">{copy.report.nextDayPlan}</p>
-                        {renderReportItemCards(report.id, "next", nextDayItems)}
+                        <ul className="mt-2 space-y-1">
+                          {nextDayItems.map((item, index) => (
+                            <li key={`${report.id}-next-${index}`}>
+                              {`${index + 1}. ${item.text || (language === "zh" ? "仅照片" : "Photo only")}`}
+                              {item.attachments.length > 0 ? (
+                                <span className="ml-2 text-xs text-slate-500">
+                                  {language === "zh"
+                                    ? `(${item.attachments.length} 张图)`
+                                    : `(${item.attachments.length} photo${item.attachments.length > 1 ? "s" : ""})`}
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
 

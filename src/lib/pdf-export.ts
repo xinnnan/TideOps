@@ -17,6 +17,21 @@ type ExportListItem = {
   text: string;
   attachments: string[];
 };
+type AttachmentFailure = {
+  path: string;
+  reason: string;
+};
+type AttachmentResolution = {
+  map: Map<string, string>;
+  failed: AttachmentFailure[];
+  requestedCount: number;
+};
+export type DailyReportPdfExportResult = {
+  storedPathCount: number;
+  renderedPathCount: number;
+  failedPaths: AttachmentFailure[];
+  usedLegacyAttachmentFallback: boolean;
+};
 type ExportSection = {
   title: string;
   description: string;
@@ -29,11 +44,6 @@ const CANVAS_WIDTH = 1100;
 const PDF_MARGIN_MM = 10;
 const PDF_FOOTER_SPACE_MM = 8;
 const PDF_BLOCK_GAP_MM = 4;
-const REPORT_THEME: PdfTheme = {
-  accent: "#0f766e",
-  accentSoft: "#ccfbf1",
-  accentText: "#115e59",
-};
 const INCIDENT_THEME: PdfTheme = {
   accent: "#b45309",
   accentSoft: "#fef3c7",
@@ -384,13 +394,23 @@ async function blobToDataUrl(blob: Blob) {
   });
 }
 
-async function resolveAttachmentMap(paths: string[]) {
+async function resolveAttachmentMap(paths: string[]): Promise<AttachmentResolution> {
   const uniquePaths = Array.from(new Set(paths.filter((path) => path.trim().length > 0)));
   const attachmentMap = new Map<string, string>();
+  const failed: AttachmentFailure[] = [];
   const supabase = getSupabaseBrowserClient();
 
   if (!supabase || uniquePaths.length === 0) {
-    return attachmentMap;
+    return {
+      map: attachmentMap,
+      failed: supabase
+        ? []
+        : uniquePaths.map((path) => ({
+            path,
+            reason: "Supabase client is not configured.",
+          })),
+      requestedCount: uniquePaths.length,
+    };
   }
 
   await Promise.all(
@@ -400,15 +420,33 @@ async function resolveAttachmentMap(paths: string[]) {
         .download(path);
 
       if (error || !data) {
+        failed.push({
+          path,
+          reason: error?.message ?? "Storage object could not be downloaded.",
+        });
         return;
       }
 
-      const dataUrl = await blobToDataUrl(data);
-      attachmentMap.set(path, dataUrl);
+      try {
+        const dataUrl = await blobToDataUrl(data);
+        attachmentMap.set(path, dataUrl);
+      } catch (error) {
+        failed.push({
+          path,
+          reason:
+            error instanceof Error
+              ? error.message
+              : "Storage object could not be converted for PDF rendering.",
+        });
+      }
     }),
   );
 
-  return attachmentMap;
+  return {
+    map: attachmentMap,
+    failed,
+    requestedCount: uniquePaths.length,
+  };
 }
 
 async function waitForImages(root: HTMLElement) {
@@ -651,6 +689,7 @@ function addCanvasToPdf(
 async function renderBlocksToPdf(
   blocks: Array<{ element: HTMLElement; gapAfterMm?: number }>,
   filename: string,
+  options: { showPageNumbers?: boolean } = {},
 ) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
     import("html2canvas"),
@@ -670,21 +709,23 @@ async function renderBlocksToPdf(
     addCanvasToPdf(pdf, canvas, cursor, block.gapAfterMm ?? PDF_BLOCK_GAP_MM);
   }
 
-  const totalPages = pdf.getNumberOfPages();
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(10);
-  pdf.setTextColor("#64748b");
+  if (options.showPageNumbers ?? true) {
+    const totalPages = pdf.getNumberOfPages();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor("#64748b");
 
-  for (let page = 1; page <= totalPages; page += 1) {
-    pdf.setPage(page);
-    pdf.text(
-      `${page} / ${totalPages}`,
-      pageWidth - PDF_MARGIN_MM,
-      pageHeight - 4,
-      { align: "right" },
-    );
+    for (let page = 1; page <= totalPages; page += 1) {
+      pdf.setPage(page);
+      pdf.text(
+        `${page} / ${totalPages}`,
+        pageWidth - PDF_MARGIN_MM,
+        pageHeight - 4,
+        { align: "right" },
+      );
+    }
   }
 
   pdf.save(filename);
@@ -712,7 +753,7 @@ async function exportDocument({
   const allPaths = listSections.flatMap((section) =>
     section.items.flatMap((item) => item.attachments),
   );
-  const attachmentMap = await resolveAttachmentMap(allPaths);
+  const attachmentResolution = await resolveAttachmentMap(allPaths);
   const { mount, body } = createDocumentMount();
 
   try {
@@ -763,7 +804,7 @@ async function exportDocument({
       }
 
       const firstItemImages = section.items[0].attachments
-        .map((path) => attachmentMap.get(path))
+        .map((path) => attachmentResolution.map.get(path))
         .filter((value): value is string => Boolean(value));
       const leadBlock = createElement("section", {
         display: "grid",
@@ -779,7 +820,7 @@ async function exportDocument({
 
       section.items.slice(1).forEach((item, index) => {
         const images = item.attachments
-          .map((path) => attachmentMap.get(path))
+          .map((path) => attachmentResolution.map.get(path))
           .filter((value): value is string => Boolean(value));
         const card = createItemCard(item, index + 1, theme, images, language);
         body.append(card);
@@ -791,6 +832,561 @@ async function exportDocument({
   } finally {
     mount.remove();
   }
+}
+
+function getDailyToneStyles(tone: "blue" | "rose" | "emerald") {
+  if (tone === "rose") {
+    return {
+      border: "#fecdd3",
+      background: "#fff1f2",
+      title: "#be123c",
+      text: "#9f1239",
+      icon: "#e11d48",
+      chip: "#ffe4e6",
+      photoBackground: "#fff7f8",
+    };
+  }
+
+  if (tone === "emerald") {
+    return {
+      border: "#bbf7d0",
+      background: "#f0fdf4",
+      title: "#047857",
+      text: "#065f46",
+      icon: "#10b981",
+      chip: "#d1fae5",
+      photoBackground: "#f7fffb",
+    };
+  }
+
+  return {
+    border: "#bfdbfe",
+    background: "#f8fbff",
+    title: "#1d4ed8",
+    text: "#172554",
+    icon: "#3b82f6",
+    chip: "#dbeafe",
+    photoBackground: "#f8fbff",
+  };
+}
+
+function formatReportTime(value: string | null | undefined) {
+  if (!value || value === "--") {
+    return "--";
+  }
+
+  if (/^\d{2}:\d{2}$/.test(value)) {
+    return `${value}:00`;
+  }
+
+  return value;
+}
+
+function formatGeneratedAt(language: ExportLanguage) {
+  const now = new Date();
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate(),
+  ).padStart(2, "0")}`;
+  const time = `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes(),
+  ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+
+  return getLabel(language, `Generated: ${date} ${time}`, `生成时间: ${date} ${time}`);
+}
+
+function createSmallIcon(label: string, color: string) {
+  const icon = createElement(
+    "div",
+    {
+      width: "28px",
+      height: "28px",
+      borderRadius: "999px",
+      background: "#ffffff",
+      border: "1px solid #e5eefb",
+      color,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "15px",
+      fontWeight: "800",
+      flex: "0 0 28px",
+    },
+    label,
+  );
+
+  return icon;
+}
+
+function createDailyReportHeader({
+  language,
+  recordNumber,
+}: {
+  language: ExportLanguage;
+  recordNumber: number;
+}) {
+  const header = createElement("section", {
+    minHeight: "118px",
+    background: "#1f2d40",
+    color: "#ffffff",
+    padding: "22px 22px 20px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "28px",
+  });
+  const left = createElement("div", {
+    display: "grid",
+    gap: "12px",
+  });
+  const titleRow = createElement("div", {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  });
+  titleRow.append(
+    createElement(
+      "div",
+      {
+        color: "#60a5fa",
+        fontSize: "24px",
+        fontWeight: "900",
+      },
+      "▣",
+    ),
+    createElement(
+      "h1",
+      {
+        margin: "0",
+        fontSize: "30px",
+        lineHeight: "1.15",
+        fontWeight: "900",
+        letterSpacing: "0",
+      },
+      getLabel(language, "Customer Project Service Summary", "客户项目服务摘要"),
+    ),
+  );
+  left.append(
+    titleRow,
+    createElement(
+      "p",
+      {
+        margin: "0",
+        color: "#b6c3d6",
+        fontSize: "16px",
+        lineHeight: "1.5",
+      },
+      getLabel(
+        language,
+        "Daily service report prepared for project stakeholders, covering completed work, risks, and next steps.",
+        "面向项目相关方整理的服务日报，汇总当日情况及风险计划。",
+      ),
+    ),
+  );
+
+  const right = createElement("div", {
+    display: "grid",
+    gap: "6px",
+    justifyItems: "end",
+    minWidth: "190px",
+  });
+  right.append(
+    createElement(
+      "div",
+      {
+        color: "#94a3b8",
+        fontSize: "14px",
+        fontWeight: "800",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+      },
+      getLabel(language, "Report ID", "编号 / REPORT ID"),
+    ),
+    createElement(
+      "div",
+      {
+        color: "#60a5fa",
+        fontSize: "30px",
+        fontWeight: "900",
+        letterSpacing: "0.08em",
+        fontFamily: "monospace",
+      },
+      `#${recordNumber}`,
+    ),
+  );
+
+  header.append(left, right);
+  return header;
+}
+
+function createDailyMetaCard({
+  icon,
+  label,
+  value,
+  gridColumn,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  gridColumn?: string;
+}) {
+  const card = createElement("div", {
+    display: "flex",
+    alignItems: "center",
+    gap: "18px",
+    border: "1px solid #e5eaf2",
+    background: "#ffffff",
+    borderRadius: "10px",
+    padding: "20px 22px",
+    minHeight: "90px",
+    gridColumn: gridColumn ?? "auto",
+  });
+  const copy = createElement("div", {
+    display: "grid",
+    gap: "7px",
+    minWidth: "0",
+  });
+  copy.append(
+    createElement(
+      "div",
+      {
+        color: "#94a3b8",
+        fontSize: "13px",
+        fontWeight: "800",
+      },
+      label,
+    ),
+    createElement(
+      "div",
+      {
+        color: "#111827",
+        fontSize: "16px",
+        lineHeight: "1.35",
+        fontWeight: "800",
+        wordBreak: "break-word",
+      },
+      value || "--",
+    ),
+  );
+  card.append(createSmallIcon(icon, "#3b82f6"), copy);
+  return card;
+}
+
+function createDailyMetaGrid({
+  language,
+  projectName,
+  authorName,
+  fieldCrew,
+  report,
+  resolvedStartTime,
+  resolvedEndTime,
+}: {
+  language: ExportLanguage;
+  projectName: string;
+  authorName: string;
+  fieldCrew: string[];
+  report: DailyReport;
+  resolvedStartTime: string;
+  resolvedEndTime: string;
+}) {
+  const crewText = fieldCrew.join(language === "zh" ? "、" : ", ");
+  const grid = createElement("section", {
+    display: "grid",
+    gap: "22px",
+    gridTemplateColumns: "1.2fr 0.58fr 0.58fr",
+  });
+  grid.append(
+    createDailyMetaCard({
+      icon: "□",
+      label: getLabel(language, "Project name", "项目名称"),
+      value: projectName,
+    }),
+    createDailyMetaCard({
+      icon: "□",
+      label: getLabel(language, "Date", "日期"),
+      value: formatDisplayDate(report.date, language),
+    }),
+    createDailyMetaCard({
+      icon: "○",
+      label: getLabel(language, "Shift", "班次"),
+      value: report.shift || "--",
+    }),
+    createDailyMetaCard({
+      icon: "○",
+      label: getLabel(language, "Submitted by", "提交人/出勤"),
+      value: crewText ? `${authorName} (${crewText})` : authorName,
+      gridColumn: "span 1",
+    }),
+    createDailyMetaCard({
+      icon: "○",
+      label: getLabel(language, "Arrival / departure", "到场/离场时间"),
+      value: `${formatReportTime(resolvedStartTime)} / ${formatReportTime(resolvedEndTime)}`,
+      gridColumn: "span 2",
+    }),
+  );
+  return grid;
+}
+
+function createDailyPhotoGrid({
+  paths,
+  attachmentResolution,
+  tone,
+  language,
+}: {
+  paths: string[];
+  attachmentResolution: AttachmentResolution;
+  tone: "blue" | "rose" | "emerald";
+  language: ExportLanguage;
+}) {
+  const uniquePaths = Array.from(new Set(paths.filter((path) => path.trim().length > 0)));
+
+  if (uniquePaths.length === 0) {
+    return null;
+  }
+
+  const colors = getDailyToneStyles(tone);
+  const grid = createElement("div", {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "14px",
+    paddingLeft: tone === "rose" ? "48px" : "40px",
+    marginTop: "14px",
+  });
+
+  uniquePaths.forEach((path, index) => {
+    const source = attachmentResolution.map.get(path);
+    const tile = createElement("figure", {
+      margin: "0",
+      width: "166px",
+      minHeight: "126px",
+      border: `1px dashed ${colors.border}`,
+      borderRadius: "8px",
+      background: colors.photoBackground,
+      display: "grid",
+      placeItems: "center",
+      overflow: "hidden",
+    });
+
+    if (source) {
+      const image = createElement("img", {
+        maxWidth: "100%",
+        width: "100%",
+        height: "auto",
+        maxHeight: "170px",
+        objectFit: "contain",
+        display: "block",
+      }) as HTMLImageElement;
+      image.src = source;
+      image.alt = `${getLabel(language, "Field photo", "现场照片")} ${index + 1}`;
+      tile.append(image);
+    } else {
+      const placeholder = createElement("div", {
+        display: "grid",
+        gap: "8px",
+        justifyItems: "center",
+        color: colors.icon,
+        fontSize: "12px",
+        fontWeight: "800",
+        textAlign: "center",
+      });
+      placeholder.append(
+        createElement("div", { fontSize: "24px", lineHeight: "1" }, "▧"),
+        createElement(
+          "div",
+          {},
+          getLabel(language, `Photo ${index + 1} unavailable`, `现场照片 ${index + 1} 无法载入`),
+        ),
+      );
+      tile.append(placeholder);
+    }
+
+    grid.append(tile);
+  });
+
+  return grid;
+}
+
+function createDailySectionBlock({
+  language,
+  tone,
+  title,
+  items,
+  attachmentResolution,
+}: {
+  language: ExportLanguage;
+  tone: "blue" | "rose" | "emerald";
+  title: string;
+  items: ExportListItem[];
+  attachmentResolution: AttachmentResolution;
+}) {
+  const colors = getDailyToneStyles(tone);
+  const section = createElement("section", {
+    border: `1px solid ${colors.border}`,
+    background: colors.background,
+    borderRadius: "10px",
+    padding: "30px 30px 30px",
+    display: "grid",
+    gap: "20px",
+    overflow: "hidden",
+  });
+  const titleRow = createElement("div", {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    color: colors.title,
+  });
+  titleRow.append(
+    createElement(
+      "div",
+      {
+        color: colors.icon,
+        fontSize: "24px",
+        fontWeight: "900",
+      },
+      tone === "rose" ? "△" : "▣",
+    ),
+    createElement(
+      "h2",
+      {
+        margin: "0",
+        color: colors.title,
+        fontSize: "22px",
+        lineHeight: "1.25",
+        fontWeight: "900",
+      },
+      title,
+    ),
+  );
+  section.append(titleRow);
+
+  if (items.length === 0) {
+    section.append(
+      createElement(
+        "div",
+        {
+          border: `1px dashed ${colors.border}`,
+          background: "#ffffff",
+          borderRadius: "8px",
+          padding: "18px 20px",
+          color: "#64748b",
+          fontSize: "15px",
+        },
+        getLabel(language, "No items recorded.", "暂无条目。"),
+      ),
+    );
+    return section;
+  }
+
+  const list = createElement("div", {
+    display: "grid",
+    gap: tone === "rose" ? "18px" : "16px",
+  });
+
+  items.forEach((item, index) => {
+    const row = createElement("div", {
+      display: "grid",
+      gap: "10px",
+      background: tone === "rose" ? "#ffffff" : "transparent",
+      borderLeft: tone === "rose" ? `4px solid ${colors.icon}` : "0",
+      borderRadius: tone === "rose" ? "8px" : "0",
+      padding: tone === "rose" ? "20px 18px 20px 24px" : "0",
+    });
+    const line = createElement("div", {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "12px",
+    });
+    line.append(
+      createElement(
+        "span",
+        {
+          width: "20px",
+          height: "20px",
+          borderRadius: "999px",
+          background: tone === "rose" ? "#ffe4e6" : "#ffffff",
+          border: `2px solid ${colors.icon}`,
+          color: colors.icon,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: tone === "rose" ? "11px" : "13px",
+          lineHeight: "1",
+          fontWeight: "900",
+          flex: "0 0 20px",
+          marginTop: "2px",
+        },
+        tone === "rose" ? String(index + 1) : "✓",
+      ),
+      createElement(
+        "div",
+        {
+          color: tone === "rose" ? colors.text : "#1f2937",
+          fontSize: "18px",
+          lineHeight: "1.6",
+          fontWeight: tone === "rose" ? "800" : "600",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        },
+        item.text.trim() || getLabel(language, "Photo only", "仅图片"),
+      ),
+    );
+    row.append(line);
+
+    const photoGrid = createDailyPhotoGrid({
+      paths: item.attachments,
+      attachmentResolution,
+      tone,
+      language,
+    });
+
+    if (photoGrid) {
+      row.append(photoGrid);
+    }
+
+    list.append(row);
+  });
+
+  section.append(list);
+  return section;
+}
+
+function createDailyFooter(language: ExportLanguage) {
+  const footer = createElement("footer", {
+    minHeight: "48px",
+    background: "#f1f5f9",
+    color: "#64748b",
+    padding: "16px 22px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    fontSize: "14px",
+    borderTop: "1px solid #e2e8f0",
+  });
+  footer.append(
+    createElement(
+      "div",
+      {},
+      getLabel(language, "Internal document. Handle with care.", "内部文档，请注意保密。"),
+    ),
+    createElement("div", {}, formatGeneratedAt(language)),
+  );
+  return footer;
+}
+
+function createDailyContentBand({
+  element,
+  isFirst,
+  isLast,
+}: {
+  element: HTMLElement;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
+  const band = createElement("div", {
+    background: "#f8fafc",
+    padding: `${isFirst ? "44px" : "0"} 22px ${isLast ? "36px" : "34px"}`,
+  });
+  band.append(element);
+  return band;
 }
 
 export async function exportDailyReportPdf({
@@ -809,10 +1405,46 @@ export async function exportDailyReportPdf({
   fallbackEndTime?: string | null;
   fallbackFieldCrew?: string[];
   language: ExportLanguage;
-}) {
-  const majorTasks = filterItems(report.majorTaskItems);
+}): Promise<DailyReportPdfExportResult> {
+  let majorTasks = filterItems(report.majorTaskItems);
   const blockers = filterItems(report.blockerItems);
   const nextDayPlan = filterItems(report.nextDayPlanItems);
+  const itemPathCount = [...majorTasks, ...blockers, ...nextDayPlan].reduce(
+    (total, item) => total + item.attachments.length,
+    0,
+  );
+  const legacyAttachmentPaths = report.attachments.filter((path) => path.trim().length > 0);
+  const usedLegacyAttachmentFallback = itemPathCount === 0 && legacyAttachmentPaths.length > 0;
+
+  if (usedLegacyAttachmentFallback) {
+    if (majorTasks.length === 0) {
+      majorTasks = [
+        {
+          text: getLabel(language, "Field photos", "现场照片"),
+          attachments: legacyAttachmentPaths,
+        },
+      ];
+    } else {
+      majorTasks = [
+        {
+          ...majorTasks[0],
+          attachments: Array.from(
+            new Set([...majorTasks[0].attachments, ...legacyAttachmentPaths]),
+          ),
+        },
+        ...majorTasks.slice(1),
+      ];
+    }
+  }
+
+  const allPaths = Array.from(
+    new Set(
+      [...majorTasks, ...blockers, ...nextDayPlan]
+        .flatMap((item) => item.attachments)
+        .filter((path) => path.trim().length > 0),
+    ),
+  );
+  const attachmentResolution = await resolveAttachmentMap(allPaths);
   const resolvedStartTime = report.startTime || fallbackStartTime || "--";
   const resolvedEndTime = report.endTime || fallbackEndTime || "--";
   const resolvedFieldCrew = Array.from(
@@ -822,68 +1454,83 @@ export async function exportDailyReportPdf({
         .filter(Boolean),
     ),
   );
+  const { mount, body } = createDocumentMount();
 
-  await exportDocument({
-    language,
-    title: getLabel(language, "Service Daily Report", "服务日报"),
-    eyebrow: getLabel(language, "Customer service summary", "客户项目服务摘要"),
-    description: getLabel(
+  try {
+    body.style.gap = "0";
+    body.style.background = "#f8fafc";
+
+    const blocks: Array<{ element: HTMLElement; gapAfterMm?: number }> = [];
+    const header = createDailyReportHeader({
       language,
-      "Prepared for project stakeholders to summarize completed service work, on-site crew coverage, current blockers, next planned steps, and supporting field photos.",
-      "面向项目相关方整理的服务日报，汇总当日完成工作、现场出勤人员、当前阻碍风险、下一步计划及相关现场照片。",
-    ),
-    metaBlocks: [
-      { label: getLabel(language, "Record #", "编号"), value: `#${report.recordNumber}` },
-      { label: getLabel(language, "Project", "项目"), value: projectName },
-      { label: getLabel(language, "Submitted by", "提交人"), value: authorName },
-      {
-        label: getLabel(language, "Date", "日期"),
-        value: formatDisplayDate(report.date, language),
-      },
-      { label: getLabel(language, "Shift", "班次"), value: report.shift || "--" },
-      {
-        label: getLabel(language, "On-site / off-site", "到场 / 离场"),
-        value: `${resolvedStartTime} / ${resolvedEndTime}`,
-      },
-      {
-        label: getLabel(language, "Field crew", "出勤人员"),
-        value:
-          resolvedFieldCrew.join(language === "zh" ? "、" : ", ") ||
-          getLabel(language, "--", "--"),
-      },
-    ],
-    listSections: [
-      {
-        title: getLabel(language, "Major tasks", "主要工作"),
-        description: getLabel(
-          language,
-          "Work completed or materially advanced during today's customer service window.",
-          "面向客户交付、当日已完成或明显推进的工作。",
-        ),
+      recordNumber: report.recordNumber,
+    });
+    body.append(header);
+    blocks.push({ element: header, gapAfterMm: 0 });
+
+    const metaGrid = createDailyMetaGrid({
+      language,
+      projectName,
+      authorName,
+      fieldCrew: resolvedFieldCrew,
+      report,
+      resolvedStartTime,
+      resolvedEndTime,
+    });
+    const dailyContentBlocks = [
+      metaGrid,
+      createDailySectionBlock({
+        language,
+        tone: "blue",
+        title: getLabel(language, "Major tasks completed", "主要工作（当日已完成）"),
         items: majorTasks,
-      },
-      {
+        attachmentResolution,
+      }),
+      createDailySectionBlock({
+        language,
+        tone: "rose",
         title: getLabel(language, "Blockers / risks", "阻碍 / 风险"),
-        description: getLabel(
-          language,
-          "Open items affecting schedule, site access, safety, quality, or delivery readiness.",
-          "当前影响进度、现场条件、安全、质量或交付准备的事项。",
-        ),
         items: blockers,
-      },
-      {
+        attachmentResolution,
+      }),
+      createDailySectionBlock({
+        language,
+        tone: "emerald",
         title: getLabel(language, "Next-day plan", "次日计划"),
-        description: getLabel(
-          language,
-          "Planned next steps for the next service window or workday.",
-          "下一服务时段或下一工作日计划推进的事项。",
-        ),
         items: nextDayPlan,
-      },
-    ],
-    filename: `${getSafeFileStem(projectName)}-daily-report-${report.recordNumber}.pdf`,
-    theme: REPORT_THEME,
-  });
+        attachmentResolution,
+      }),
+    ];
+
+    dailyContentBlocks.forEach((element, index) => {
+      const band = createDailyContentBand({
+        element,
+        isFirst: index === 0,
+        isLast: index === dailyContentBlocks.length - 1,
+      });
+      body.append(band);
+      blocks.push({ element: band, gapAfterMm: 0 });
+    });
+
+    const footer = createDailyFooter(language);
+    body.append(footer);
+    blocks.push({ element: footer, gapAfterMm: 0 });
+
+    await renderBlocksToPdf(
+      blocks,
+      `${getSafeFileStem(projectName)}-daily-report-${report.recordNumber}.pdf`,
+      { showPageNumbers: false },
+    );
+  } finally {
+    mount.remove();
+  }
+
+  return {
+    storedPathCount: attachmentResolution.requestedCount,
+    renderedPathCount: attachmentResolution.map.size,
+    failedPaths: attachmentResolution.failed,
+    usedLegacyAttachmentFallback,
+  };
 }
 
 export async function exportIncidentPdf({

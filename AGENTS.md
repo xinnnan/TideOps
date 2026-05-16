@@ -134,6 +134,8 @@ After finishing any meaningful task:
 - Updated on `2026-04-06`: safety check-in PDF export now uses that same browser-rendered bilingual export path, so safety, report, and incident exports all follow one consistent Chinese-safe rendering approach.
 - Updated on `2026-04-06`: exported PDFs paginate more cleanly when rendered block-by-block instead of as one long page canvas. Keep section titles attached to their first content block so headings do not get stranded at the bottom of a page.
 - Updated on `2026-04-07`: do not give exported PDF photos a fixed display height. Use max-width/max-height constraints with `height: auto` so attached images keep their original aspect ratio in report and incident exports.
+- Updated on `2026-05-16`: daily report PDF export now returns photo diagnostics. No stored paths means a report data issue in item-level JSON or legacy `attachments_json`; failed downloads mean a Supabase Storage `field-media` read policy, missing object, or bad stored path issue.
+- Updated on `2026-05-16`: daily report PDFs use a client-service-summary layout with a dark header, compact meta cards, blue completed-work section, rose risk section, green next-plan section, and footer. Keep field crew in the submitter/attendance meta card instead of adding a duplicate crew section.
 - Updated on `2026-04-06`: daily reports now carry a `field_crew_json` list. This is a flat string array that can mix platform users and manually entered external names, and it should appear both in the in-app report feed and in exported PDFs.
 - Updated on `2026-04-06`: client-facing daily report PDFs should not leave attendance context blank just because the author skipped a field. Prefer saved report values first, then fall back to attendance times and at least the author name for field crew when exporting or saving sparse reports.
 - Updated on `2026-04-06`: in the daily report PDF, keep crew information only once. The `Field crew` meta value is sufficient; do not repeat it again as a standalone section unless the document later needs richer crew-specific details.
@@ -171,28 +173,29 @@ After finishing any meaningful task:
 - Verified on `2026-05-16`: this checkout currently has no `.env.local`, so local browser QA cannot reach authenticated Supabase-backed workspace screens until the public Supabase env values are restored locally.
 - Verified on `2026-05-16`: commit `47c63d0` with the report-photo/Admin Overview changes was pushed to `main` using the SSH GitHub remote.
 - Verified on `2026-04-06`: `vercel` CLI is installed as `50.9.5`, but `vercel whoami` currently returns `No existing credentials found`, so deployment is blocked until the machine is authenticated to Vercel.
-- Verified on `2026-04-06`: local `.env.local` already contains non-empty values for `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, so dashboard-based Vercel deployment can proceed once those same two values are added in Vercel Project Settings.
 
 ## Current Scratchpad
 
 Task summary:
 
-- Commit and push the completed report-photo and Admin Overview activity-review changes to `main`.
+- Troubleshoot why daily report exported PDFs do not include attached photos, remove the unnecessary in-app photo preview detour, and redesign the daily report PDF export to match the provided Chinese service-summary reference.
 
 Checklist:
 
-- [x] Re-read project continuity notes and refresh this scratchpad for the commit/push task
-- [x] Review git status and current branch/remote
-- [x] Stage the intended changed files
-- [x] Create a clear commit for the completed work
-- [x] Push the current branch to GitHub over SSH after HTTPS auth failed locally
-- [x] Re-read AGENTS.md and leave the scratchpad clean with the pushed commit details
+- [x] Re-read project continuity notes and refresh this scratchpad for the PDF export task
+- [x] Inspect the attached reference image and current PDF export implementation
+- [x] Remove in-app report photo preview changes that are not needed for the user's PDF issue
+- [x] Make PDF export diagnose missing media as stored-path vs Supabase storage download/policy failure
+- [x] Redesign daily report PDF export to match the provided service-summary style
+- [x] Run lint/build or best available verification
+- [x] Re-read AGENTS.md, record durable lessons, and leave the scratchpad clean
 
 Most likely next tasks:
 
 - [ ] If more records later need "people on site" data, add an explicit shared participant model instead of inferring everything from author names
 - [ ] If attendance gaps need project-specific expected workdays, add a shift/schedule model instead of treating weekdays without logs as missing.
-- [ ] If report photo previews show "not available" for managers, re-check the `field-media` operations-manager read policy and stored object paths.
+- [ ] If a daily report PDF says there are no saved photo paths, inspect `major_tasks_items_json`, `blocker_items_json`, `next_day_plan_items_json`, and legacy `attachments_json` for that report.
+- [ ] If a daily report PDF says stored photos could not download, re-check the `field-media` operations-manager read policy and stored object paths.
 - [ ] Restore local `.env.local` public Supabase values before live QA of authenticated Admin/report screens.
 - [ ] If field crew later needs richer structure such as lead/technician roles, store that in a separate JSON object instead of overloading a flat string list
 - [ ] If Admin Overview grows again, consider splitting the activity review into a dedicated operations review route while preserving the overview entry point.
