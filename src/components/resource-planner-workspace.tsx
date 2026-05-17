@@ -362,6 +362,7 @@ export function ResourcePlannerWorkspace({
   const [placeholderCompanyId, setPlaceholderCompanyId] = useState("");
   const [placeholderSkills, setPlaceholderSkills] = useState("");
   const [placeholderCapacity, setPlaceholderCapacity] = useState("8");
+  const [isAllocationModalOpen, setIsAllocationModalOpen] = useState(false);
   const [editingAllocationId, setEditingAllocationId] = useState("");
   const [allocationResourceId, setAllocationResourceId] = useState("");
   const [allocationProjectId, setAllocationProjectId] = useState("");
@@ -390,6 +391,19 @@ export function ResourcePlannerWorkspace({
   const effectiveAllocationResourceId =
     allocationResourceId || selectedResource?.id || resourcePeople[0]?.id || "";
   const effectiveAllocationProjectId = allocationProjectId || projectFilterId || projects[0]?.id || "";
+  const allocationResource = resourcePeople.find(
+    (resource) => resource.id === effectiveAllocationResourceId,
+  );
+  const allocationProject = projects.find((project) => project.id === effectiveAllocationProjectId);
+  const allocationProjectContext = allocationProject
+    ? getProjectContext(allocationProject.id, projects, clients, sites)
+    : null;
+  const canSaveAllocation = Boolean(
+    effectiveAllocationResourceId &&
+      effectiveAllocationProjectId &&
+      allocationStartDate &&
+      allocationEndDate,
+  );
   const normalizedQuery = resourceQuery.trim().toLowerCase();
   const visibleAllocations = useMemo(
     () =>
@@ -509,6 +523,16 @@ export function ResourcePlannerWorkspace({
     setAllocationNotes("");
   }
 
+  function closeAllocationModal() {
+    setIsAllocationModalOpen(false);
+    resetAllocationForm();
+  }
+
+  function openBlankAllocationModal() {
+    resetAllocationForm();
+    setIsAllocationModalOpen(true);
+  }
+
   function beginAllocationForCell(resource: ResourcePerson, date: string) {
     setEditingAllocationId("");
     setSelectedResourceId(resource.id);
@@ -521,6 +545,7 @@ export function ResourcePlannerWorkspace({
     setAllocationRole(resource.title ?? "");
     setAllocationStatus("tentative");
     setAllocationNotes("");
+    setIsAllocationModalOpen(true);
   }
 
   function handleCellKeyDown(
@@ -546,6 +571,7 @@ export function ResourcePlannerWorkspace({
     setAllocationStatus(allocation.status);
     setAllocationNotes(allocation.notes ?? "");
     setSelectedResourceId(allocation.resourceId);
+    setIsAllocationModalOpen(true);
   }
 
   async function handleCreatePlaceholder() {
@@ -575,6 +601,15 @@ export function ResourcePlannerWorkspace({
   }
 
   async function handleSaveAllocation() {
+    if (!canSaveAllocation) {
+      onNotify(
+        language === "zh"
+          ? "请选择资源、项目和日期后再保存。"
+          : "Choose a resource, project, and dates before saving.",
+      );
+      return;
+    }
+
     const payload = {
       resourceId: effectiveAllocationResourceId,
       projectId: effectiveAllocationProjectId,
@@ -603,6 +638,7 @@ export function ResourcePlannerWorkspace({
     );
 
     if (result.ok) {
+      setIsAllocationModalOpen(false);
       resetAllocationForm();
     }
   }
@@ -630,6 +666,7 @@ export function ResourcePlannerWorkspace({
     );
 
     if (result.ok) {
+      setIsAllocationModalOpen(false);
       resetAllocationForm();
     }
   }
@@ -674,135 +711,7 @@ export function ResourcePlannerWorkspace({
       </section>
 
       <section className="space-y-4">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-          <Card>
-            <CardHeader>
-              <CardEyebrow>{language === "zh" ? "安排" : "Allocation"}</CardEyebrow>
-              <CardTitle>
-                {editingAllocationId
-                  ? language === "zh"
-                    ? "编辑资源安排"
-                    : "Edit allocation"
-                  : language === "zh"
-                    ? "新增资源安排"
-                    : "New allocation"}
-              </CardTitle>
-              <CardDescription>
-                {language === "zh"
-                  ? "选择资源、项目、日期和计划工时。"
-                  : "Choose the resource, project, dates, and planned hours."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-3 lg:grid-cols-2">
-                <LabeledSelect
-                  label={language === "zh" ? "资源" : "Resource"}
-                  value={effectiveAllocationResourceId}
-                  onChange={setAllocationResourceId}
-                  options={
-                    resourcePeople.length > 0
-                      ? resourcePeople.map((resource) => ({
-                          label: resource.displayName,
-                          value: resource.id,
-                        }))
-                      : [{ value: "", label: language === "zh" ? "暂无资源" : "No resources" }]
-                  }
-                />
-                <LabeledSelect
-                  label={language === "zh" ? "项目" : "Project"}
-                  value={effectiveAllocationProjectId}
-                  onChange={setAllocationProjectId}
-                  options={
-                    projectOptions.length > 0
-                      ? projectOptions
-                      : [{ value: "", label: language === "zh" ? "暂无项目" : "No projects" }]
-                  }
-                />
-              </div>
-              <div className="grid gap-3 md:grid-cols-4">
-                <LabeledInput
-                  label={language === "zh" ? "开始" : "Start"}
-                  type="date"
-                  value={allocationStartDate}
-                  onChange={setAllocationStartDate}
-                />
-                <LabeledInput
-                  label={language === "zh" ? "结束" : "End"}
-                  type="date"
-                  value={allocationEndDate}
-                  onChange={setAllocationEndDate}
-                />
-                <LabeledInput
-                  label={language === "zh" ? "每日小时" : "Hours / day"}
-                  type="number"
-                  value={allocationHours}
-                  onChange={setAllocationHours}
-                />
-                <LabeledInput
-                  label={language === "zh" ? "使用率 %" : "Allocation %"}
-                  type="number"
-                  value={allocationPercent}
-                  onChange={setAllocationPercent}
-                />
-              </div>
-              <div className="grid gap-3 lg:grid-cols-[1fr_0.55fr]">
-                <LabeledInput
-                  label={language === "zh" ? "角色 / 工作" : "Role / work"}
-                  value={allocationRole}
-                  onChange={setAllocationRole}
-                />
-                <LabeledSelect
-                  label={language === "zh" ? "状态" : "Status"}
-                  value={allocationStatus}
-                  onChange={(value) => setAllocationStatus(value as ResourceAllocation["status"])}
-                  options={[
-                    { value: "tentative", label: language === "zh" ? "暂定" : "Tentative" },
-                    { value: "confirmed", label: language === "zh" ? "已确认" : "Confirmed" },
-                  ]}
-                />
-              </div>
-              <LabeledTextarea
-                label={language === "zh" ? "备注" : "Notes"}
-                value={allocationNotes}
-                onChange={setAllocationNotes}
-                rows={2}
-              />
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleSaveAllocation}
-                  className="rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark"
-                >
-                  {editingAllocationId
-                    ? language === "zh"
-                      ? "保存安排"
-                      : "Save allocation"
-                    : language === "zh"
-                      ? "创建安排"
-                      : "Create allocation"}
-                </button>
-                {editingAllocationId ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={resetAllocationForm}
-                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                    >
-                      {language === "zh" ? "取消编辑" : "Cancel edit"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDeleteAllocation}
-                      className="rounded-2xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
-                    >
-                      {language === "zh" ? "删除" : "Delete"}
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
-
+        <div className="max-w-2xl">
           <Card>
             <CardHeader>
               <CardEyebrow>{language === "zh" ? "资源资料" : "Resource profile"}</CardEyebrow>
@@ -875,7 +784,7 @@ export function ResourcePlannerWorkspace({
                 onClick={() => shiftVisibleRange(-1)}
                 className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                {language === "zh" ? "上一段" : "Previous"}
+                {language === "zh" ? "前一段" : "Roll back"}
               </button>
               <button
                 type="button"
@@ -889,11 +798,11 @@ export function ResourcePlannerWorkspace({
                 onClick={() => shiftVisibleRange(1)}
                 className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                {language === "zh" ? "下一段" : "Next"}
+                {language === "zh" ? "后一段" : "Roll forward"}
               </button>
               <button
                 type="button"
-                onClick={resetAllocationForm}
+                onClick={openBlankAllocationModal}
                 className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
               >
                 {language === "zh" ? "新增安排" : "New allocation"}
@@ -1096,7 +1005,7 @@ export function ResourcePlannerWorkspace({
                                   })}
                                   {day.allocations.length === 0 ? (
                                     <span className="mt-3 inline-flex rounded-full border border-dashed border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-400">
-                                      {language === "zh" ? "点击安排" : "Click to plan"}
+                                      {language === "zh" ? "安排" : "Plan"}
                                     </span>
                                   ) : null}
                                 </div>
@@ -1170,6 +1079,229 @@ export function ResourcePlannerWorkspace({
           </Card>
         </div>
       </section>
+
+      {isAllocationModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"
+          onClick={closeAllocationModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[28px] bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">
+                  {language === "zh" ? "资源安排" : "Allocation"}
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-slate-950">
+                  {editingAllocationId
+                    ? language === "zh"
+                      ? "编辑排班"
+                      : "Edit schedule"
+                    : language === "zh"
+                      ? "安排资源"
+                      : "Schedule resource"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {allocationResource?.displayName ?? (language === "zh" ? "未选择资源" : "No resource selected")}
+                  {" · "}
+                  {allocationStartDate ? formatDisplayDate(allocationStartDate, language) : "--"}
+                  {allocationEndDate && allocationEndDate !== allocationStartDate
+                    ? ` - ${formatDisplayDate(allocationEndDate, language)}`
+                    : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeAllocationModal}
+                className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                {language === "zh" ? "关闭" : "Close"}
+              </button>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    {language === "zh" ? "资源" : "Resource"}
+                  </p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-950">
+                    {allocationResource?.displayName ?? "--"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {allocationResource
+                      ? `${allocationResource.capacityHoursPerDay}h / ${
+                          language === "zh" ? "天" : "day"
+                        }`
+                      : "--"}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    {language === "zh" ? "项目" : "Project"}
+                  </p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-950">
+                    {allocationProjectContext?.projectName ?? "--"}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-slate-500">
+                    {allocationProjectContext
+                      ? `${allocationProjectContext.clientName} / ${allocationProjectContext.siteName}`
+                      : "--"}
+                  </p>
+                </div>
+                <div
+                  className={cn(
+                    "rounded-2xl p-3",
+                    allocationStatus === "confirmed" ? "bg-emerald-50" : "bg-amber-50",
+                  )}
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    {language === "zh" ? "状态" : "Status"}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 text-sm font-semibold",
+                      allocationStatus === "confirmed" ? "text-emerald-700" : "text-amber-700",
+                    )}
+                  >
+                    {allocationStatus === "confirmed"
+                      ? language === "zh"
+                        ? "已确认"
+                        : "Confirmed"
+                      : language === "zh"
+                        ? "暂定"
+                        : "Tentative"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {allocationHours || "0"}h / {allocationPercent || "0"}%
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                <LabeledSelect
+                  label={language === "zh" ? "资源" : "Resource"}
+                  value={effectiveAllocationResourceId}
+                  onChange={setAllocationResourceId}
+                  options={
+                    resourcePeople.length > 0
+                      ? resourcePeople.map((resource) => ({
+                          label: resource.displayName,
+                          value: resource.id,
+                        }))
+                      : [{ value: "", label: language === "zh" ? "暂无资源" : "No resources" }]
+                  }
+                />
+                <LabeledSelect
+                  label={language === "zh" ? "项目" : "Project"}
+                  value={effectiveAllocationProjectId}
+                  onChange={setAllocationProjectId}
+                  options={
+                    projectOptions.length > 0
+                      ? projectOptions
+                      : [{ value: "", label: language === "zh" ? "暂无项目" : "No projects" }]
+                  }
+                />
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-4">
+                <LabeledInput
+                  label={language === "zh" ? "开始" : "Start"}
+                  type="date"
+                  value={allocationStartDate}
+                  onChange={setAllocationStartDate}
+                />
+                <LabeledInput
+                  label={language === "zh" ? "结束" : "End"}
+                  type="date"
+                  value={allocationEndDate}
+                  onChange={setAllocationEndDate}
+                />
+                <LabeledInput
+                  label={language === "zh" ? "每日小时" : "Hours / day"}
+                  type="number"
+                  value={allocationHours}
+                  onChange={setAllocationHours}
+                />
+                <LabeledInput
+                  label={language === "zh" ? "使用率 %" : "Allocation %"}
+                  type="number"
+                  value={allocationPercent}
+                  onChange={setAllocationPercent}
+                />
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-[1fr_0.55fr]">
+                <LabeledInput
+                  label={language === "zh" ? "角色 / 工作" : "Role / work"}
+                  value={allocationRole}
+                  onChange={setAllocationRole}
+                />
+                <LabeledSelect
+                  label={language === "zh" ? "状态" : "Status"}
+                  value={allocationStatus}
+                  onChange={(value) => setAllocationStatus(value as ResourceAllocation["status"])}
+                  options={[
+                    { value: "tentative", label: language === "zh" ? "暂定" : "Tentative" },
+                    { value: "confirmed", label: language === "zh" ? "已确认" : "Confirmed" },
+                  ]}
+                />
+              </div>
+
+              <LabeledTextarea
+                label={language === "zh" ? "备注" : "Notes"}
+                value={allocationNotes}
+                onChange={setAllocationNotes}
+                rows={2}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 p-5">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveAllocation}
+                  disabled={!canSaveAllocation}
+                  className={cn(
+                    "rounded-2xl px-4 py-2 text-sm font-semibold text-white transition",
+                    canSaveAllocation
+                      ? "bg-brand hover:bg-brand-dark"
+                      : "cursor-not-allowed bg-slate-300",
+                  )}
+                >
+                  {editingAllocationId
+                    ? language === "zh"
+                      ? "保存排班"
+                      : "Save schedule"
+                    : language === "zh"
+                      ? "创建排班"
+                      : "Create schedule"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeAllocationModal}
+                  className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  {language === "zh" ? "取消" : "Cancel"}
+                </button>
+              </div>
+              {editingAllocationId ? (
+                <button
+                  type="button"
+                  onClick={handleDeleteAllocation}
+                  className="rounded-2xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                >
+                  {language === "zh" ? "删除排班" : "Delete schedule"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
