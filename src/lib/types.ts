@@ -30,6 +30,8 @@ export type ContactType =
   | "project_contact";
 
 export type VisibilityScope = "internal_only" | "customer_facing";
+export type ResourcePersonType = "platform_user" | "placeholder";
+export type ResourceAllocationStatus = "tentative" | "confirmed";
 
 export interface MediaListItem {
   text: string;
@@ -111,6 +113,33 @@ export interface ProjectAssignment {
   endDate?: string | null;
   notes?: string | null;
   active: boolean;
+}
+
+export interface ResourcePerson {
+  id: string;
+  linkedUserId?: string | null;
+  displayName: string;
+  resourceType: ResourcePersonType;
+  homeCompanyId?: string | null;
+  title?: string | null;
+  skills: string[];
+  capacityHoursPerDay: number;
+  active: boolean;
+  createdBy?: string | null;
+}
+
+export interface ResourceAllocation {
+  id: string;
+  resourceId: string;
+  projectId: string;
+  startDate: string;
+  endDate: string;
+  plannedHoursPerDay: number;
+  allocationPercent: number;
+  roleLabel?: string | null;
+  status: ResourceAllocationStatus;
+  notes?: string | null;
+  createdBy?: string | null;
 }
 
 export interface Contact {
@@ -246,6 +275,8 @@ export interface WorkspaceData {
   projectCompanyShares: ProjectCompanyShare[];
   profiles: Profile[];
   projectAssignments: ProjectAssignment[];
+  resourcePeople: ResourcePerson[];
+  resourceAllocations: ResourceAllocation[];
   contacts: Contact[];
   attendanceLogs: AttendanceLog[];
   leaveRequests: LeaveRequest[];

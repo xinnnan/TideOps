@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAppState } from "@/components/providers/app-provider";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { ResourcePlannerWorkspace } from "@/components/resource-planner-workspace";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -38,6 +39,7 @@ import {
 type AdminTab =
   | "account"
   | "overview"
+  | "resources"
   | "users"
   | "structure"
   | "network"
@@ -3771,6 +3773,7 @@ export default function AdminPage() {
     ? ([
         { key: "account", label: language === "zh" ? "账号" : "Account" },
         { key: "overview", label: language === "zh" ? "概览" : "Overview" },
+        { key: "resources", label: language === "zh" ? "资源" : "Resources" },
         { key: "users", label: language === "zh" ? "用户" : "Users" },
         { key: "structure", label: language === "zh" ? "结构" : "Structure" },
         { key: "network", label: language === "zh" ? "项目网络" : "Network" },
@@ -4076,6 +4079,10 @@ export default function AdminPage() {
             </Card>
           </section>
         </div>
+      ) : null}
+
+      {activeTab === "resources" ? (
+        <ResourcePlannerWorkspace onNotify={setFeedback} />
       ) : null}
 
       {activeTab === "users" ? (

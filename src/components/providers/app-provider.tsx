@@ -20,6 +20,7 @@ import type {
   LeaveRequest,
   MediaListDraftItem,
   Profile,
+  ResourceAllocation,
   WorkspaceData,
 } from "@/lib/types";
 import {
@@ -36,6 +37,8 @@ import {
   mapProject,
   mapProjectAssignment,
   mapProjectCompanyShare,
+  mapResourceAllocation,
+  mapResourcePerson,
   mapSafetyCheckin,
   mapSite,
 } from "@/lib/workspace";
@@ -157,6 +160,46 @@ interface AppContextValue extends WorkspaceData {
     notes: string;
     active: boolean;
   }) => Promise<ActionResult>;
+  createResourcePerson: (payload: {
+    displayName: string;
+    title: string;
+    homeCompanyId: string;
+    skills: string;
+    capacityHoursPerDay: string;
+  }) => Promise<ActionResult>;
+  updateResourcePerson: (payload: {
+    id: string;
+    displayName: string;
+    title: string;
+    homeCompanyId: string;
+    skills: string;
+    capacityHoursPerDay: string;
+    active: boolean;
+  }) => Promise<ActionResult>;
+  createResourceAllocation: (payload: {
+    resourceId: string;
+    projectId: string;
+    startDate: string;
+    endDate: string;
+    plannedHoursPerDay: string;
+    allocationPercent: string;
+    roleLabel: string;
+    status: ResourceAllocation["status"];
+    notes: string;
+  }) => Promise<ActionResult>;
+  updateResourceAllocation: (payload: {
+    id: string;
+    resourceId: string;
+    projectId: string;
+    startDate: string;
+    endDate: string;
+    plannedHoursPerDay: string;
+    allocationPercent: string;
+    roleLabel: string;
+    status: ResourceAllocation["status"];
+    notes: string;
+  }) => Promise<ActionResult>;
+  deleteResourceAllocation: (allocationId: string) => Promise<ActionResult>;
   clockIn: (payload: {
     projectId: string;
     note: string;
@@ -524,6 +567,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await supabase.storage.from(FIELD_MEDIA_BUCKET).remove(paths);
   }
 
+  function parseResourceSkills(value: string) {
+    return Array.from(
+      new Set(
+        value
+          .split(/[\n,]/)
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  function parsePlanningNumber(value: string, fallback: number) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function getResourceNameRequiredMessage() {
+    return language === "zh" ? "请填写资源名称。" : "Add a resource name first.";
+  }
+
+  function getResourceScheduleRequiredMessage() {
+    return language === "zh"
+      ? "请选择资源、项目和日期。"
+      : "Choose a resource, project, and dates first.";
+  }
+
+  function getInvalidDateRangeMessage() {
+    return language === "zh"
+      ? "结束日期不能早于开始日期。"
+      : "End date cannot be before start date.";
+  }
+
   async function loadWorkspace(userId: string) {
     const supabase = getSupabaseBrowserClient();
 
@@ -543,6 +618,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       projectSharesResult,
       profilesResult,
       assignmentsResult,
+      resourcePeopleResult,
+      resourceAllocationsResult,
       contactsResult,
       attendanceResult,
       leaveResult,
@@ -564,6 +641,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .from("project_assignments")
         .select("*")
         .order("start_date", { ascending: false }),
+      supabase.from("resource_people").select("*").order("display_name"),
+      supabase
+        .from("resource_allocations")
+        .select("*")
+        .order("start_date", { ascending: true }),
       supabase.from("contacts").select("*").order("created_at", { ascending: false }),
       supabase
         .from("attendance_logs")
@@ -600,6 +682,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       projectSharesResult.error ??
       profilesResult.error ??
       assignmentsResult.error ??
+      resourcePeopleResult.error ??
+      resourceAllocationsResult.error ??
       contactsResult.error ??
       attendanceResult.error ??
       leaveResult.error ??
@@ -635,6 +719,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
       projectAssignments: (assignmentsResult.data ?? []).map((row) =>
         mapProjectAssignment(row as Record<string, unknown>),
+      ),
+      resourcePeople: (resourcePeopleResult.data ?? []).map((row) =>
+        mapResourcePerson(row as Record<string, unknown>),
+      ),
+      resourceAllocations: (resourceAllocationsResult.data ?? []).map((row) =>
+        mapResourceAllocation(row as Record<string, unknown>),
       ),
       contacts: (contactsResult.data ?? []).map((row) =>
         mapContact(row as Record<string, unknown>),
@@ -1399,6 +1489,217 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     await insertAuditLog("Project assignment updated", "project_assignment", payload.id);
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function createResourcePerson(payload: {
+    displayName: string;
+    title: string;
+    homeCompanyId: string;
+    skills: string;
+    capacityHoursPerDay: string;
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+    const displayName = payload.displayName.trim();
+
+    if (!supabase) {
+      return { ok: false, error: getSetupErrorMessage() };
+    }
+
+    if (!displayName) {
+      return { ok: false, error: getResourceNameRequiredMessage() };
+    }
+
+    const capacityHours = parsePlanningNumber(payload.capacityHoursPerDay, 8);
+    const { data, error } = await supabase
+      .from("resource_people")
+      .insert({
+        display_name: displayName,
+        resource_type: "placeholder",
+        home_company_id: payload.homeCompanyId || null,
+        title: payload.title.trim() || null,
+        skills_json: parseResourceSkills(payload.skills),
+        capacity_hours_per_day: Math.min(Math.max(capacityHours, 0), 24),
+        active: true,
+        created_by: sessionUserId,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Resource placeholder created", "resource_person", String(data.id));
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function updateResourcePerson(payload: {
+    id: string;
+    displayName: string;
+    title: string;
+    homeCompanyId: string;
+    skills: string;
+    capacityHoursPerDay: string;
+    active: boolean;
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+    const displayName = payload.displayName.trim();
+
+    if (!supabase) {
+      return { ok: false, error: getSetupErrorMessage() };
+    }
+
+    if (!displayName) {
+      return { ok: false, error: getResourceNameRequiredMessage() };
+    }
+
+    const capacityHours = parsePlanningNumber(payload.capacityHoursPerDay, 8);
+    const { error } = await supabase
+      .from("resource_people")
+      .update({
+        display_name: displayName,
+        home_company_id: payload.homeCompanyId || null,
+        title: payload.title.trim() || null,
+        skills_json: parseResourceSkills(payload.skills),
+        capacity_hours_per_day: Math.min(Math.max(capacityHours, 0), 24),
+        active: payload.active,
+      })
+      .eq("id", payload.id);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Resource updated", "resource_person", payload.id);
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function createResourceAllocation(payload: {
+    resourceId: string;
+    projectId: string;
+    startDate: string;
+    endDate: string;
+    plannedHoursPerDay: string;
+    allocationPercent: string;
+    roleLabel: string;
+    status: ResourceAllocation["status"];
+    notes: string;
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      return { ok: false, error: getSetupErrorMessage() };
+    }
+
+    if (!payload.resourceId || !payload.projectId || !payload.startDate || !payload.endDate) {
+      return { ok: false, error: getResourceScheduleRequiredMessage() };
+    }
+
+    if (payload.endDate < payload.startDate) {
+      return { ok: false, error: getInvalidDateRangeMessage() };
+    }
+
+    const plannedHours = parsePlanningNumber(payload.plannedHoursPerDay, 8);
+    const allocationPercent = Math.round(parsePlanningNumber(payload.allocationPercent, 100));
+    const { data, error } = await supabase
+      .from("resource_allocations")
+      .insert({
+        resource_id: payload.resourceId,
+        project_id: payload.projectId,
+        start_date: payload.startDate,
+        end_date: payload.endDate,
+        planned_hours_per_day: Math.min(Math.max(plannedHours, 0.25), 24),
+        allocation_percent: Math.min(Math.max(allocationPercent, 1), 200),
+        role_label: payload.roleLabel.trim() || null,
+        status: payload.status,
+        notes: payload.notes.trim() || null,
+        created_by: sessionUserId,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Resource allocation created", "resource_allocation", String(data.id));
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function updateResourceAllocation(payload: {
+    id: string;
+    resourceId: string;
+    projectId: string;
+    startDate: string;
+    endDate: string;
+    plannedHoursPerDay: string;
+    allocationPercent: string;
+    roleLabel: string;
+    status: ResourceAllocation["status"];
+    notes: string;
+  }): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      return { ok: false, error: getSetupErrorMessage() };
+    }
+
+    if (!payload.resourceId || !payload.projectId || !payload.startDate || !payload.endDate) {
+      return { ok: false, error: getResourceScheduleRequiredMessage() };
+    }
+
+    if (payload.endDate < payload.startDate) {
+      return { ok: false, error: getInvalidDateRangeMessage() };
+    }
+
+    const plannedHours = parsePlanningNumber(payload.plannedHoursPerDay, 8);
+    const allocationPercent = Math.round(parsePlanningNumber(payload.allocationPercent, 100));
+    const { error } = await supabase
+      .from("resource_allocations")
+      .update({
+        resource_id: payload.resourceId,
+        project_id: payload.projectId,
+        start_date: payload.startDate,
+        end_date: payload.endDate,
+        planned_hours_per_day: Math.min(Math.max(plannedHours, 0.25), 24),
+        allocation_percent: Math.min(Math.max(allocationPercent, 1), 200),
+        role_label: payload.roleLabel.trim() || null,
+        status: payload.status,
+        notes: payload.notes.trim() || null,
+      })
+      .eq("id", payload.id);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Resource allocation updated", "resource_allocation", payload.id);
+    await refreshWorkspace();
+    return { ok: true };
+  }
+
+  async function deleteResourceAllocation(allocationId: string): Promise<ActionResult> {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      return { ok: false, error: getSetupErrorMessage() };
+    }
+
+    const { error } = await supabase
+      .from("resource_allocations")
+      .delete()
+      .eq("id", allocationId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    await insertAuditLog("Resource allocation deleted", "resource_allocation", allocationId);
     await refreshWorkspace();
     return { ok: true };
   }
@@ -2509,6 +2810,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateUserProfile,
     createProjectAssignment,
     updateProjectAssignment,
+    createResourcePerson,
+    updateResourcePerson,
+    createResourceAllocation,
+    updateResourceAllocation,
+    deleteResourceAllocation,
     clockIn,
     clockOut,
     updateAttendanceLog,

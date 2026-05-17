@@ -12,6 +12,8 @@ import type {
   Project,
   ProjectAssignment,
   ProjectCompanyShare,
+  ResourceAllocation,
+  ResourcePerson,
   SafetyCheckin,
   Site,
   WorkspaceData,
@@ -88,6 +90,8 @@ export function createEmptyWorkspace(): WorkspaceData {
     projectCompanyShares: [],
     profiles: [],
     projectAssignments: [],
+    resourcePeople: [],
+    resourceAllocations: [],
     contacts: [],
     attendanceLogs: [],
     leaveRequests: [],
@@ -187,6 +191,41 @@ export function mapProjectAssignment(
     endDate: (row.end_date as string | null | undefined) ?? null,
     notes: (row.notes as string | null | undefined) ?? null,
     active: Boolean(row.active),
+  };
+}
+
+export function mapResourcePerson(row: Record<string, unknown>): ResourcePerson {
+  return {
+    id: String(row.id),
+    linkedUserId: (row.linked_user_id as string | null | undefined) ?? null,
+    displayName: String(row.display_name ?? ""),
+    resourceType:
+      (row.resource_type as ResourcePerson["resourceType"]) ?? "placeholder",
+    homeCompanyId: (row.home_company_id as string | null | undefined) ?? null,
+    title: (row.title as string | null | undefined) ?? null,
+    skills: parseStringArray(row.skills_json),
+    capacityHoursPerDay: Number(row.capacity_hours_per_day ?? 8),
+    active: Boolean(row.active),
+    createdBy: (row.created_by as string | null | undefined) ?? null,
+  };
+}
+
+export function mapResourceAllocation(
+  row: Record<string, unknown>,
+): ResourceAllocation {
+  return {
+    id: String(row.id),
+    resourceId: String(row.resource_id),
+    projectId: String(row.project_id),
+    startDate: String(row.start_date ?? ""),
+    endDate: String(row.end_date ?? ""),
+    plannedHoursPerDay: Number(row.planned_hours_per_day ?? 8),
+    allocationPercent: Number(row.allocation_percent ?? 100),
+    roleLabel: (row.role_label as string | null | undefined) ?? null,
+    status:
+      (row.status as ResourceAllocation["status"]) ?? "tentative",
+    notes: (row.notes as string | null | undefined) ?? null,
+    createdBy: (row.created_by as string | null | undefined) ?? null,
   };
 }
 
