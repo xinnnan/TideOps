@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { useAppState } from "@/components/providers/app-provider";
 import { MetricCard } from "@/components/metric-card";
 import {
@@ -509,6 +509,31 @@ export function ResourcePlannerWorkspace({
     setAllocationNotes("");
   }
 
+  function beginAllocationForCell(resource: ResourcePerson, date: string) {
+    setEditingAllocationId("");
+    setSelectedResourceId(resource.id);
+    setAllocationResourceId(resource.id);
+    setAllocationProjectId(projectFilterId || projects[0]?.id || "");
+    setAllocationStartDate(date);
+    setAllocationEndDate(date);
+    setAllocationHours(String(resource.capacityHoursPerDay || 8));
+    setAllocationPercent("100");
+    setAllocationRole(resource.title ?? "");
+    setAllocationStatus("tentative");
+    setAllocationNotes("");
+  }
+
+  function handleCellKeyDown(
+    event: KeyboardEvent<HTMLDivElement>,
+    resource: ResourcePerson,
+    date: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      beginAllocationForCell(resource, date);
+    }
+  }
+
   function loadAllocationForEdit(allocation: ResourceAllocation) {
     setEditingAllocationId(allocation.id);
     setAllocationResourceId(allocation.resourceId);
@@ -614,6 +639,11 @@ export function ResourcePlannerWorkspace({
     setWeekStart(addDaysToIsoDate(weekStart, amount * direction));
   }
 
+  const timelineGridTemplateColumns =
+    viewMode === "week"
+      ? "240px repeat(7, minmax(0, 1fr))"
+      : `250px repeat(${visibleDates.length}, minmax(142px, 1fr))`;
+
   return (
     <div className="space-y-4">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -643,7 +673,159 @@ export function ResourcePlannerWorkspace({
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <section className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+          <Card>
+            <CardHeader>
+              <CardEyebrow>{language === "zh" ? "安排" : "Allocation"}</CardEyebrow>
+              <CardTitle>
+                {editingAllocationId
+                  ? language === "zh"
+                    ? "编辑资源安排"
+                    : "Edit allocation"
+                  : language === "zh"
+                    ? "新增资源安排"
+                    : "New allocation"}
+              </CardTitle>
+              <CardDescription>
+                {language === "zh"
+                  ? "选择资源、项目、日期和计划工时。"
+                  : "Choose the resource, project, dates, and planned hours."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3 lg:grid-cols-2">
+                <LabeledSelect
+                  label={language === "zh" ? "资源" : "Resource"}
+                  value={effectiveAllocationResourceId}
+                  onChange={setAllocationResourceId}
+                  options={
+                    resourcePeople.length > 0
+                      ? resourcePeople.map((resource) => ({
+                          label: resource.displayName,
+                          value: resource.id,
+                        }))
+                      : [{ value: "", label: language === "zh" ? "暂无资源" : "No resources" }]
+                  }
+                />
+                <LabeledSelect
+                  label={language === "zh" ? "项目" : "Project"}
+                  value={effectiveAllocationProjectId}
+                  onChange={setAllocationProjectId}
+                  options={
+                    projectOptions.length > 0
+                      ? projectOptions
+                      : [{ value: "", label: language === "zh" ? "暂无项目" : "No projects" }]
+                  }
+                />
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <LabeledInput
+                  label={language === "zh" ? "开始" : "Start"}
+                  type="date"
+                  value={allocationStartDate}
+                  onChange={setAllocationStartDate}
+                />
+                <LabeledInput
+                  label={language === "zh" ? "结束" : "End"}
+                  type="date"
+                  value={allocationEndDate}
+                  onChange={setAllocationEndDate}
+                />
+                <LabeledInput
+                  label={language === "zh" ? "每日小时" : "Hours / day"}
+                  type="number"
+                  value={allocationHours}
+                  onChange={setAllocationHours}
+                />
+                <LabeledInput
+                  label={language === "zh" ? "使用率 %" : "Allocation %"}
+                  type="number"
+                  value={allocationPercent}
+                  onChange={setAllocationPercent}
+                />
+              </div>
+              <div className="grid gap-3 lg:grid-cols-[1fr_0.55fr]">
+                <LabeledInput
+                  label={language === "zh" ? "角色 / 工作" : "Role / work"}
+                  value={allocationRole}
+                  onChange={setAllocationRole}
+                />
+                <LabeledSelect
+                  label={language === "zh" ? "状态" : "Status"}
+                  value={allocationStatus}
+                  onChange={(value) => setAllocationStatus(value as ResourceAllocation["status"])}
+                  options={[
+                    { value: "tentative", label: language === "zh" ? "暂定" : "Tentative" },
+                    { value: "confirmed", label: language === "zh" ? "已确认" : "Confirmed" },
+                  ]}
+                />
+              </div>
+              <LabeledTextarea
+                label={language === "zh" ? "备注" : "Notes"}
+                value={allocationNotes}
+                onChange={setAllocationNotes}
+                rows={2}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveAllocation}
+                  className="rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark"
+                >
+                  {editingAllocationId
+                    ? language === "zh"
+                      ? "保存安排"
+                      : "Save allocation"
+                    : language === "zh"
+                      ? "创建安排"
+                      : "Create allocation"}
+                </button>
+                {editingAllocationId ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={resetAllocationForm}
+                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      {language === "zh" ? "取消编辑" : "Cancel edit"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAllocation}
+                      className="rounded-2xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                    >
+                      {language === "zh" ? "删除" : "Delete"}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardEyebrow>{language === "zh" ? "资源资料" : "Resource profile"}</CardEyebrow>
+              <CardTitle>{language === "zh" ? "当前资源" : "Selected resource"}</CardTitle>
+              <CardDescription>
+                {language === "zh"
+                  ? "平台用户会自动进入资源池，占位技术人员可在下方添加。"
+                  : "Platform users are added automatically; placeholder technicians can be added below."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ResourceProfileEditor
+                key={selectedResource?.id ?? "empty-resource"}
+                resource={selectedResource}
+                companies={companies}
+                language={language}
+                updateResourcePerson={updateResourcePerson}
+                onNotify={onNotify}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
         <Card>
           <CardHeader>
             <CardEyebrow>{language === "zh" ? "资源日历" : "Resource calendar"}</CardEyebrow>
@@ -729,9 +911,9 @@ export function ResourcePlannerWorkspace({
             ) : (
               <div className="overflow-x-auto rounded-[28px] border border-slate-200 bg-white">
                 <div
-                  className="grid min-w-max"
+                  className={cn("grid", viewMode === "week" ? "min-w-full" : "min-w-max")}
                   style={{
-                    gridTemplateColumns: `250px repeat(${visibleDates.length}, minmax(142px, 1fr))`,
+                    gridTemplateColumns: timelineGridTemplateColumns,
                   }}
                 >
                   <div className="sticky left-0 z-20 border-b border-r border-slate-200 bg-slate-50 p-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -840,9 +1022,18 @@ export function ResourcePlannerWorkspace({
                             return (
                               <div
                                 key={`${resource.id}-${date}`}
+                                role={day.allocations.length === 0 ? "button" : undefined}
+                                tabIndex={day.allocations.length === 0 ? 0 : undefined}
+                                onClick={() => beginAllocationForCell(resource, date)}
+                                onKeyDown={
+                                  day.allocations.length === 0
+                                    ? (event) => handleCellKeyDown(event, resource, date)
+                                    : undefined
+                                }
                                 className={cn(
-                                  "min-h-[126px] border-b border-r border-slate-100 p-2",
+                                  "min-h-[126px] cursor-pointer border-b border-r border-slate-100 p-2 outline-none transition focus-visible:ring-2 focus-visible:ring-brand/40",
                                   isWeekdayDate(date) ? "bg-white" : "bg-slate-50/80",
+                                  day.allocations.length === 0 && "hover:bg-brand/5",
                                   day.utilization > 100 && "bg-rose-50/70",
                                 )}
                               >
@@ -874,7 +1065,10 @@ export function ResourcePlannerWorkspace({
                                       <button
                                         type="button"
                                         key={allocation.id}
-                                        onClick={() => loadAllocationForEdit(allocation)}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          loadAllocationForEdit(allocation);
+                                        }}
                                         className="w-full rounded-xl border px-2 py-2 text-left text-xs shadow-sm transition hover:-translate-y-0.5 hover:shadow"
                                         style={{
                                           backgroundColor: colors.background,
@@ -900,6 +1094,11 @@ export function ResourcePlannerWorkspace({
                                       </button>
                                     );
                                   })}
+                                  {day.allocations.length === 0 ? (
+                                    <span className="mt-3 inline-flex rounded-full border border-dashed border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-400">
+                                      {language === "zh" ? "点击安排" : "Click to plan"}
+                                    </span>
+                                  ) : null}
                                 </div>
                               </div>
                             );
@@ -914,155 +1113,7 @@ export function ResourcePlannerWorkspace({
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardEyebrow>{language === "zh" ? "安排" : "Allocation"}</CardEyebrow>
-              <CardTitle>
-                {editingAllocationId
-                  ? language === "zh"
-                    ? "编辑资源安排"
-                    : "Edit allocation"
-                  : language === "zh"
-                    ? "新增资源安排"
-                    : "New allocation"}
-              </CardTitle>
-              <CardDescription>
-                {language === "zh"
-                  ? "选择资源、项目、日期和计划工时。"
-                  : "Choose the resource, project, dates, and planned hours."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <LabeledSelect
-                label={language === "zh" ? "资源" : "Resource"}
-                value={effectiveAllocationResourceId}
-                onChange={setAllocationResourceId}
-                options={
-                  resourcePeople.length > 0
-                    ? resourcePeople.map((resource) => ({
-                        label: resource.displayName,
-                        value: resource.id,
-                      }))
-                    : [{ value: "", label: language === "zh" ? "暂无资源" : "No resources" }]
-                }
-              />
-              <LabeledSelect
-                label={language === "zh" ? "项目" : "Project"}
-                value={effectiveAllocationProjectId}
-                onChange={setAllocationProjectId}
-                options={
-                  projectOptions.length > 0
-                    ? projectOptions
-                    : [{ value: "", label: language === "zh" ? "暂无项目" : "No projects" }]
-                }
-              />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <LabeledInput
-                  label={language === "zh" ? "开始" : "Start"}
-                  type="date"
-                  value={allocationStartDate}
-                  onChange={setAllocationStartDate}
-                />
-                <LabeledInput
-                  label={language === "zh" ? "结束" : "End"}
-                  type="date"
-                  value={allocationEndDate}
-                  onChange={setAllocationEndDate}
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <LabeledInput
-                  label={language === "zh" ? "每日小时" : "Hours / day"}
-                  type="number"
-                  value={allocationHours}
-                  onChange={setAllocationHours}
-                />
-                <LabeledInput
-                  label={language === "zh" ? "使用率 %" : "Allocation %"}
-                  type="number"
-                  value={allocationPercent}
-                  onChange={setAllocationPercent}
-                />
-              </div>
-              <LabeledInput
-                label={language === "zh" ? "角色 / 工作" : "Role / work"}
-                value={allocationRole}
-                onChange={setAllocationRole}
-              />
-              <LabeledSelect
-                label={language === "zh" ? "状态" : "Status"}
-                value={allocationStatus}
-                onChange={(value) => setAllocationStatus(value as ResourceAllocation["status"])}
-                options={[
-                  { value: "tentative", label: language === "zh" ? "暂定" : "Tentative" },
-                  { value: "confirmed", label: language === "zh" ? "已确认" : "Confirmed" },
-                ]}
-              />
-              <LabeledTextarea
-                label={language === "zh" ? "备注" : "Notes"}
-                value={allocationNotes}
-                onChange={setAllocationNotes}
-                rows={3}
-              />
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleSaveAllocation}
-                  className="rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark"
-                >
-                  {editingAllocationId
-                    ? language === "zh"
-                      ? "保存安排"
-                      : "Save allocation"
-                    : language === "zh"
-                      ? "创建安排"
-                      : "Create allocation"}
-                </button>
-                {editingAllocationId ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={resetAllocationForm}
-                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                    >
-                      {language === "zh" ? "取消编辑" : "Cancel edit"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDeleteAllocation}
-                      className="rounded-2xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
-                    >
-                      {language === "zh" ? "删除" : "Delete"}
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardEyebrow>{language === "zh" ? "资源资料" : "Resource profile"}</CardEyebrow>
-              <CardTitle>{language === "zh" ? "当前资源" : "Selected resource"}</CardTitle>
-              <CardDescription>
-                {language === "zh"
-                  ? "平台用户会自动进入资源池，占位技术人员可在下方添加。"
-                  : "Platform users are added automatically; placeholder technicians can be added below."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <ResourceProfileEditor
-                key={selectedResource?.id ?? "empty-resource"}
-                resource={selectedResource}
-                companies={companies}
-                language={language}
-                updateResourcePerson={updateResourcePerson}
-                onNotify={onNotify}
-              />
-            </CardContent>
-          </Card>
-
+        <div className="max-w-2xl">
           <Card>
             <CardHeader>
               <CardEyebrow>{language === "zh" ? "占位" : "Placeholder"}</CardEyebrow>

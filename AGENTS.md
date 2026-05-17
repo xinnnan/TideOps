@@ -161,6 +161,7 @@ After finishing any meaningful task:
 - Updated on `2026-05-16`: Admin Overview now includes an activity review calendar backed by loaded workspace data. Until a real shift/schedule model exists, "missing attendance" means weekdays through today with no attendance log, not a definitive absence finding.
 - Updated on `2026-05-17`: Admin resource planning should use dedicated planning tables instead of overloading `project_assignments` or `attendance_logs`. Project assignments are access/eligibility, attendance is actual field history, and planned allocation needs its own platform-user-or-placeholder resource model.
 - Updated on `2026-05-17`: the Admin Resources MVP uses `resource_people` and `resource_allocations`, auto-seeds platform users into resources, lets managers add placeholder technicians, and renders a row-by-day calendar/timeline with planned hours, utilization, leave badges, and overbooking warnings.
+- Updated on `2026-05-17`: Admin Resources keeps allocation and resource-profile controls above the full-width resource calendar. The default view is a 7-day week, previous/next rolls the timeline by the active view span, and clicking an empty resource/day cell prefills a one-day allocation for that resource.
 
 ### Current Verified State
 
@@ -172,6 +173,7 @@ After finishing any meaningful task:
 - `npm run lint` passed on `2026-05-17`
 - `npm run build` passed on `2026-05-17`
 - `git diff --check` passed on `2026-05-17`
+- Local routes `/admin?tab=resources` and `/login` returned HTTP `200` on a fresh port `3002` dev server on `2026-05-17`; browser smoke reached the unauthenticated sign-in screen because `.env.local` is still missing.
 - Local routes `/login` and `/today` returned HTTP `200` on `2026-04-05`
 - Old dev servers on ports `3000` and `3001` were stopped and a fresh `npm run dev` instance was restarted on port `3000` on `2026-04-05`
 - Fresh `npm run dev` started on port `3000` on `2026-05-16`; browser smoke reached the unauthenticated/unconfigured sign-in screen, so Admin internals were verified by lint/build rather than live logged-in data.
@@ -184,13 +186,13 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Commit and push the completed Admin resource planning implementation to `main`.
+- Commit and push the completed Admin Resources calendar layout refinement to `main`.
 
 Checklist:
 
 - [x] Re-read project continuity notes and refresh this scratchpad for the commit/push task
-- [x] Review git status and intended changed files
-- [x] Stage the resource planning implementation files
+- [x] Review git status and changed files
+- [x] Stage the resource calendar layout changes
 - [x] Create a clear commit
 - [x] Push `main` to GitHub
 - [x] Re-read AGENTS.md and leave continuity notes clean
@@ -199,7 +201,6 @@ Most likely next tasks:
 
 - [ ] If more records later need "people on site" data, add an explicit shared participant model instead of inferring everything from author names
 - [ ] If attendance gaps need project-specific expected workdays, add a shift/schedule model instead of treating weekdays without logs as missing.
-- [ ] If resource planning is approved, add real scheduling tables instead of overloading project assignments or attendance logs.
 - [ ] Run `supabase/migrations/20260517090000_add_resource_planning.sql` in Supabase before using the Admin Resources tab in a deployed environment.
 - [ ] If managers need drag-resize scheduling later, build it on top of `resource_allocations` instead of changing the data model.
 - [ ] If a daily report PDF says there are no saved photo paths, inspect `major_tasks_items_json`, `blocker_items_json`, `next_day_plan_items_json`, and legacy `attachments_json` for that report.
