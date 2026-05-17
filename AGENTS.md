@@ -177,6 +177,7 @@ After finishing any meaningful task:
 - Fresh `npm run dev` started on port `3000` on `2026-05-16`; browser smoke reached the unauthenticated/unconfigured sign-in screen, so Admin internals were verified by lint/build rather than live logged-in data.
 - Verified on `2026-05-16`: this checkout currently has no `.env.local`, so local browser QA cannot reach authenticated Supabase-backed workspace screens until the public Supabase env values are restored locally.
 - Verified on `2026-05-16`: commit `47c63d0` with the report-photo/Admin Overview changes was pushed to `main` using the SSH GitHub remote.
+- Verified on `2026-05-17`: commit `a643bce` with the Admin resource planner MVP was pushed to `main` using the SSH GitHub remote.
 - Verified on `2026-04-06`: `vercel` CLI is installed as `50.9.5`, but `vercel whoami` currently returns `No existing credentials found`, so deployment is blocked until the machine is authenticated to Vercel.
 
 ## Current Scratchpad
@@ -188,11 +189,11 @@ Task summary:
 Checklist:
 
 - [x] Re-read project continuity notes and refresh this scratchpad for the commit/push task
-- [ ] Review git status and intended changed files
-- [ ] Stage the resource planning implementation files
-- [ ] Create a clear commit
-- [ ] Push `main` to GitHub
-- [ ] Re-read AGENTS.md and leave continuity notes clean
+- [x] Review git status and intended changed files
+- [x] Stage the resource planning implementation files
+- [x] Create a clear commit
+- [x] Push `main` to GitHub
+- [x] Re-read AGENTS.md and leave continuity notes clean
 
 Most likely next tasks:
 
