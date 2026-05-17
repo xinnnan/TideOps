@@ -163,6 +163,7 @@ After finishing any meaningful task:
 - Updated on `2026-05-17`: the Admin Resources MVP uses `resource_people` and `resource_allocations`, auto-seeds platform users into resources, lets managers add placeholder technicians, and renders a row-by-day calendar/timeline with planned hours, utilization, leave badges, and overbooking warnings.
 - Updated on `2026-05-17`: Admin Resources keeps allocation and resource-profile controls above the full-width resource calendar. The default view is a 7-day week, previous/next rolls the timeline by the active view span, and clicking an empty resource/day cell prefills a one-day allocation for that resource.
 - Updated on `2026-05-17`: Admin Resources scheduling now follows a calendar-first interaction. Allocation create/edit lives in a modal opened from an empty resource/day cell, an existing allocation block, or the new-allocation button; do not reintroduce a separate always-visible allocation form above the calendar.
+- Updated on `2026-05-17`: Admin Resources page order should put the resource calendar before the resource profile editor so scheduling is the first working surface managers see.
 
 ### Current Verified State
 
@@ -176,6 +177,7 @@ After finishing any meaningful task:
 - `git diff --check` passed on `2026-05-17`
 - Local routes `/admin?tab=resources` and `/login` returned HTTP `200` on a fresh port `3002` dev server on `2026-05-17`; browser smoke reached the unauthenticated sign-in screen because `.env.local` is still missing.
 - After the calendar-first scheduling modal change, `npm run lint`, `npm run build`, and `git diff --check` passed on `2026-05-17`; browser smoke on `/admin?tab=resources` reached the unauthenticated sign-in screen because `.env.local` is still missing.
+- After moving the resource calendar above the profile editor, `npm run lint`, `npm run build`, and `git diff --check` passed on `2026-05-17`.
 - Local routes `/login` and `/today` returned HTTP `200` on `2026-04-05`
 - Old dev servers on ports `3000` and `3001` were stopped and a fresh `npm run dev` instance was restarted on port `3000` on `2026-04-05`
 - Fresh `npm run dev` started on port `3000` on `2026-05-16`; browser smoke reached the unauthenticated/unconfigured sign-in screen, so Admin internals were verified by lint/build rather than live logged-in data.
@@ -188,14 +190,14 @@ After finishing any meaningful task:
 
 Task summary:
 
-- Commit and push the completed calendar-first Admin Resources scheduling modal update to `main`.
+- Commit and push the Admin Resources calendar-above-profile layout reorder to `main`.
 
 Checklist:
 
 - [x] Re-read project continuity notes and refresh this scratchpad for the commit/push task
 - [x] Review git status and changed files
-- [x] Confirm verification already passed for the scheduling modal update
-- [x] Stage the scheduling modal changes
+- [x] Confirm verification already passed for the layout reorder
+- [x] Stage the layout reorder changes
 - [x] Create a clear commit
 - [x] Push `main` to GitHub
 - [x] Re-read AGENTS.md and leave continuity notes clean

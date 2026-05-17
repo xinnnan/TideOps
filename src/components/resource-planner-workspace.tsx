@@ -711,30 +711,6 @@ export function ResourcePlannerWorkspace({
       </section>
 
       <section className="space-y-4">
-        <div className="max-w-2xl">
-          <Card>
-            <CardHeader>
-              <CardEyebrow>{language === "zh" ? "资源资料" : "Resource profile"}</CardEyebrow>
-              <CardTitle>{language === "zh" ? "当前资源" : "Selected resource"}</CardTitle>
-              <CardDescription>
-                {language === "zh"
-                  ? "平台用户会自动进入资源池，占位技术人员可在下方添加。"
-                  : "Platform users are added automatically; placeholder technicians can be added below."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <ResourceProfileEditor
-                key={selectedResource?.id ?? "empty-resource"}
-                resource={selectedResource}
-                companies={companies}
-                language={language}
-                updateResourcePerson={updateResourcePerson}
-                onNotify={onNotify}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
         <Card>
           <CardHeader>
             <CardEyebrow>{language === "zh" ? "资源日历" : "Resource calendar"}</CardEyebrow>
@@ -1021,6 +997,30 @@ export function ResourcePlannerWorkspace({
             )}
           </CardContent>
         </Card>
+
+        <div className="max-w-2xl">
+          <Card>
+            <CardHeader>
+              <CardEyebrow>{language === "zh" ? "资源资料" : "Resource profile"}</CardEyebrow>
+              <CardTitle>{language === "zh" ? "当前资源" : "Selected resource"}</CardTitle>
+              <CardDescription>
+                {language === "zh"
+                  ? "平台用户会自动进入资源池，占位技术人员可在下方添加。"
+                  : "Platform users are added automatically; placeholder technicians can be added below."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ResourceProfileEditor
+                key={selectedResource?.id ?? "empty-resource"}
+                resource={selectedResource}
+                companies={companies}
+                language={language}
+                updateResourcePerson={updateResourcePerson}
+                onNotify={onNotify}
+              />
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="max-w-2xl">
           <Card>
